@@ -76,3 +76,18 @@ test('normaliza CRLF, nbsp e tabs; remove brancos finais', () => {
   assert.equal(items.length, 1);
   assert.deepEqual(items[0].chords, [{ name: 'Am', col: 0 }, { name: 'F', col: 4 }]);
 });
+
+test('caracteres invisíveis e espaços Unicode não quebram a detecção de acordes', () => {
+  const casos = ['​G6\nA solidão entrou', ' ​  G6​\nA solidão entrou', 'G6­\nA solidão entrou', '  G6　\nA solidão entrou', 'G​6\nA solidão entrou'];
+  for (const c of casos) {
+    const lines = parseSong(c).filter((i) => i.kind === 'line');
+    assert.equal(lines.length, 1, JSON.stringify(c));
+    assert.deepEqual(lines[0].chords.map((x) => x.name), ['G6'], JSON.stringify(c));
+    assert.equal(lines[0].lyric, 'A solidão entrou');
+  }
+});
+
+test('espaços Unicode largos mantêm a coluna do acorde', () => {
+  const [l] = parseSong('Am  F\nletra aqui').filter((i) => i.kind === 'line');
+  assert.deepEqual(l.chords, [{ name: 'Am', col: 0 }, { name: 'F', col: 4 }]);
+});

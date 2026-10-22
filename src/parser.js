@@ -30,8 +30,9 @@ export function parseChordLine(line) {
 
 function normalize(text) {
   return text
-    .replace(/\r\n?/g, '\n')
-    .replace(/ /g, ' ')
+    .replace(/[\u200b-\u200f\u2060\ufeff\u00ad\u202a-\u202e]/g, '') // invisíveis: largura zero, soft hyphen, marcas de direção
+    .replace(/\r\n?|[\u2028\u2029]/g, '\n')
+    .replace(/\p{Zs}/gu, ' ') // nbsp, espaços largos/finos, ideográfico → espaço comum
     .split('\n')
     .map((l) => l.replace(/\t/g, '    ').replace(/\s+$/, ''));
 }
