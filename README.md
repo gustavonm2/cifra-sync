@@ -19,7 +19,13 @@ Use sempre `http://` (não `file://`): o service worker e o player do YouTube ex
 npm test           # node --test (Node 18+), sem dependências
 ```
 
-Cobrem o parser de cifras (`tests/parser.test.js`), acordes e transposição (`tests/chords.test.js`), tap tempo (`tests/tap-tempo.test.js`) e linha do tempo/marcadores (`tests/timeline.test.js`).
+Cobrem o parser de cifras (`tests/parser.test.js`), acordes e transposição (`tests/chords.test.js`), tap tempo (`tests/tap-tempo.test.js`) linha do tempo/marcadores (`tests/timeline.test.js`) e extração do Cifra Club (`tests/cifraclub.test.js`).
+
+## Importar do Cifra Club
+
+Em **Colar cifra**, cole o link (`https://www.cifraclub.com.br/artista/musica/`) no campo "Importar" e toque em **Importar**; colar só o link direto na caixa da cifra também funciona. Título, artista e cifra são preenchidos e você revisa antes de salvar.
+
+O navegador não pode ler o Cifra Club diretamente (CORS), então a busca passa por `api/cifra.js`, uma função serverless da Vercel (também atendida por `npm start` em `/api/cifra`). Ela só aceita links de `cifraclub.com(.br)` e não guarda nada. Se o site bloquear a busca automática ou mudar o HTML, o app mostra o erro e o caminho de copiar/colar continua funcionando. Sem o deploy (por exemplo, hospedagem puramente estática), só o copiar/colar funciona. Use apenas para sua cifra pessoal: o conteúdo pertence ao Cifra Club e aos autores.
 
 ## Como usar
 
@@ -53,7 +59,9 @@ Nenhum áudio é baixado: o vídeo é só o player embutido da IFrame API.
 
 ```
 index.html  manifest.webmanifest  sw.js
+api/cifra.js     função serverless: busca a página do Cifra Club
 src/
+  cifraclub.js   valida o link e extrai título/artista/cifra do HTML
   parser.js      texto → seções e linhas (acordes com coluna + letra)
   chords.js      reconhecimento e transposição de acordes
   tap-tempo.js   BPM por toques (mediana, descarte de outliers), ½×/2×

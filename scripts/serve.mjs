@@ -15,6 +15,11 @@ const types = {
 createServer(async (req, res) => {
   try {
     let path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (path === '/api/cifra') {
+      const { default: handler } = await import('../api/cifra.js');
+      req.query = Object.fromEntries(new URL(req.url, 'http://x').searchParams);
+      return handler(req, res);
+    }
     if (path.endsWith('/')) path += 'index.html';
     const file = join(root, normalize(path));
     if (!file.startsWith(root)) throw new Error('fora da raiz');

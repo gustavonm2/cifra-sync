@@ -7,6 +7,7 @@ import { Metronome } from './metronome.js';
 import { VideoPlayer, extractVideoId } from './youtube.js';
 import * as store from './storage.js';
 import { DEMO_SONG } from './demo.js';
+import { isCifraClubUrl } from './cifraclub.js';
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -617,6 +618,46 @@ function updateParseInfo() {
     : $('#f-text').value.trim() ? 'Nenhuma linha de acordes encontrada — confira se os acordes estão em linhas próprias.' : '';
 }
 $('#f-text').addEventListener('input', updateParseInfo);
+
+// ---------- importar do Cifra Club (via /api/cifra) ----------
+async function importFromCifraClub(url) {
+  const info = $('#parse-info');
+  const btn = $('#btn-import');
+  if (!isCifraClubUrl(url)) {
+    info.textContent = 'Cole um link no formato cifraclub.com.br/artista/musica/';
+    return;
+  }
+  if ($('#f-text').value.trim() && !confirm('Substituir a cifra que já está na caixa pela importada?')) return;
+  btn.disabled = true;
+  info.textContent = 'Buscando a cifra…';
+  try {
+    const r = await fetch('api/cifra?url=' + encodeURIComponent(url.trim()));
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'Não foi possível importar. Copie e cole o texto da cifra.');
+    $('#f-text').value = data.text;
+    if (data.title) $('#f-title').value = data.title;
+    if (data.artist) $('#f-artist').value = data.artist;
+    $('#f-cc').value = '';
+    updateParseInfo();
+  } catch (e) {
+    info.textContent = e instanceof TypeError ? 'Sem conexão com o servidor: a importação precisa de internet e do deploy com /api.' : e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+$('#btn-import').addEventListener('click', () => importFromCifraClub($('#f-cc').value));
+$('#f-cc').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); importFromCifraClub($('#f-cc').value); }
+});
+// colar só o link na caixa da cifra também importa
+$('#f-text').addEventListener('paste', (e) => {
+  const pasted = (e.clipboardData?.getData('text') ?? '').trim();
+  if (pasted && !pasted.includes('\n') && isCifraClubUrl(pasted)) {
+    e.preventDefault();
+    $('#f-text').value = '';
+    importFromCifraClub(pasted);
+  }
+});
 
 $('#form-edit').addEventListener('submit', (e) => {
   if (e.submitter?.value !== 'save') return;

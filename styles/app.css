@@ -155,6 +155,11 @@ dialog h2 { margin: 0 0 14px; font-size: 20px; }
 dialog label { display: block; color: var(--dim); font-size: 13px; margin-bottom: 12px; }
 dialog input, dialog textarea { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; min-height: 44px; border-radius: 10px; background: var(--bg); border: 1px solid #39414e; color: var(--text); font-size: 16px; }
 dialog textarea { font-family: var(--mono); font-size: 14px; line-height: 1.35; white-space: pre; overflow: auto; resize: vertical; min-height: 220px; }
+.import-field { margin-bottom: 12px; }
+.import-field label { margin-bottom: 0; }
+.import-row { display: flex; gap: 8px; align-items: flex-end; }
+.import-row input { margin-top: 6px; flex: 1; }
+.import-row .btn { flex: none; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .hint { color: var(--dim); font-size: 13px; margin: 0 0 12px; min-height: 1.3em; }
 .dlg-actions { display: flex; gap: 8px; align-items: center; }
