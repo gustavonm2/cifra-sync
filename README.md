@@ -25,7 +25,9 @@ Cobrem o parser de cifras (`tests/parser.test.js`), acordes e transposição (`t
 
 Em **Colar cifra**, cole o link (`https://www.cifraclub.com.br/artista/musica/`) no campo "Importar" e toque em **Importar**; colar só o link direto na caixa da cifra também funciona. Título, artista e cifra são preenchidos e você revisa antes de salvar.
 
-O navegador não pode ler o Cifra Club diretamente (CORS), então a busca passa por `api/cifra.js`, uma função serverless da Vercel (também atendida por `npm start` em `/api/cifra`). Ela só aceita links de `cifraclub.com(.br)` e não guarda nada. Se o site bloquear a busca automática ou mudar o HTML, o app mostra o erro e o caminho de copiar/colar continua funcionando. Sem o deploy (por exemplo, hospedagem puramente estática), só o copiar/colar funciona. Use apenas para sua cifra pessoal: o conteúdo pertence ao Cifra Club e aos autores.
+O navegador não pode ler o Cifra Club diretamente (CORS), então a busca passa por `api/cifra.js`, uma função serverless da Vercel (também atendida por `npm start` em `/api/cifra`). Ela só aceita links de `cifraclub.com(.br)` e não guarda nada. Se o site bloquear a busca automática ou mudar o HTML, o app mostra o erro e o caminho de copiar/colar continua funcionando. Sem o deploy (por exemplo, hospedagem puramente estática), só o copiar/colar funciona. **Se o botão Importar for bloqueado** (o Cifra Club recusa buscas vindas de servidores), use o **favorito de importação**: no editor, abra "O botão Importar foi bloqueado?" e arraste "Enviar ao Cifra Sync" para a barra de favoritos. Abra a cifra no Cifra Club normalmente e clique no favorito: ele lê a página no seu navegador e abre o Cifra Sync com título, artista e cifra preenchidos (via `#import=` na URL; nada passa por servidor). Funciona em navegadores de computador/tablet com barra de favoritos.
+
+Use apenas para sua cifra pessoal: o conteúdo pertence ao Cifra Club e aos autores.
 
 ## Como usar
 

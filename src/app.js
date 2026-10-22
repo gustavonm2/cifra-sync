@@ -633,7 +633,8 @@ async function importFromCifraClub(url) {
   try {
     const r = await fetch('api/cifra?url=' + encodeURIComponent(url.trim()));
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error || 'Não foi possível importar. Copie e cole o texto da cifra.');
+    if (!r.ok) throw new Error((data.error || 'Não foi possível importar.') + (r.status === 502 ? ' Alternativa: use o favorito de importação abaixo.' : ''));
+
     $('#f-text').value = data.text;
     if (data.title) $('#f-title').value = data.title;
     if (data.artist) $('#f-artist').value = data.artist;
@@ -645,6 +646,40 @@ async function importFromCifraClub(url) {
     btn.disabled = false;
   }
 }
+// ---------- favorito de importação (roda no navegador do usuário, na página do Cifra Club) ----------
+function bookmarkletHref() {
+  const code = `(()=>{var p=document.querySelector('pre');if(!p){alert('Não encontrei a cifra nesta página.');return}`
+    + `var t=function(s){var e=document.querySelector(s);return e?e.innerText.trim():''};`
+    + `var d=JSON.stringify({title:t('h1')||document.title,artist:t('h2'),text:p.innerText});`
+    + `var b=btoa(String.fromCharCode.apply(null,new TextEncoder().encode(d)));`
+    + `window.open('${location.origin}/#import='+encodeURIComponent(b),'_blank')})()`;
+  return 'javascript:' + encodeURIComponent(code);
+}
+$('#bookmarklet').setAttribute('href', bookmarkletHref());
+$('#bookmarklet').addEventListener('click', (e) => {
+  e.preventDefault();
+  toast('Arraste o botão para a barra de favoritos, não clique');
+});
+
+/** Abre o editor com a cifra enviada pelo favorito (#import=base64(JSON utf-8)). */
+function importFromHash() {
+  const m = /^#import=(.+)$/.exec(location.hash);
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  try {
+    const bin = atob(decodeURIComponent(m[1]));
+    const data = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+    if (typeof data.text !== 'string' || !data.text.trim()) throw new Error('vazio');
+    openEditor(null);
+    $('#f-title').value = String(data.title ?? '').slice(0, 200);
+    $('#f-artist').value = String(data.artist ?? '').slice(0, 200);
+    $('#f-text').value = data.text;
+    updateParseInfo();
+  } catch {
+    toast('Não consegui ler a cifra enviada pelo favorito');
+  }
+}
+
 $('#btn-import').addEventListener('click', () => importFromCifraClub($('#f-cc').value));
 $('#f-cc').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); importFromCifraClub($('#f-cc').value); }
@@ -735,6 +770,7 @@ function boot() {
   const current = songs.find((s) => s.id === store.loadCurrentId()) ?? songs[0];
   loadSong(current);
   requestAnimationFrame(frame);
+  importFromHash();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }

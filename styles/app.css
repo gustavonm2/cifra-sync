@@ -160,6 +160,11 @@ dialog textarea { font-family: var(--mono); font-size: 14px; line-height: 1.35; 
 .import-row { display: flex; gap: 8px; align-items: flex-end; }
 .import-row input { margin-top: 6px; flex: 1; }
 .import-row .btn { flex: none; }
+.bm-help { margin: -4px 0 12px; font-size: 13px; color: var(--dim); }
+.bm-help summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.bm-help p { margin: 6px 0; line-height: 1.5; }
+.bm-help .btn { display: inline-flex; align-items: center; margin-left: 6px; color: var(--amber); text-decoration: none; cursor: grab; }
+.bm-note { font-size: 12px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .hint { color: var(--dim); font-size: 13px; margin: 0 0 12px; min-height: 1.3em; }
 .dlg-actions { display: flex; gap: 8px; align-items: center; }
