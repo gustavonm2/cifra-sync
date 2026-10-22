@@ -23,9 +23,7 @@ Cobrem o parser de cifras (`tests/parser.test.js`), acordes e transposição (`t
 
 ## Importar do Cifra Club
 
-Em **Colar cifra**, cole o link (`https://www.cifraclub.com.br/artista/musica/`) no campo "Importar" e toque em **Importar**; colar só o link direto na caixa da cifra também funciona. Título, artista e cifra são preenchidos e você revisa antes de salvar.
-
-O navegador não pode ler o Cifra Club diretamente (CORS), então a busca passa por `api/cifra.js`, uma função serverless da Vercel (também atendida por `npm start` em `/api/cifra`). Ela só aceita links de `cifraclub.com(.br)` e não guarda nada. Se o site bloquear a busca automática ou mudar o HTML, o app mostra o erro e o caminho de copiar/colar continua funcionando. Sem o deploy (por exemplo, hospedagem puramente estática), só o copiar/colar funciona. **Se o botão Importar for bloqueado** (o Cifra Club recusa buscas vindas de servidores), use o **favorito de importação**: no editor, abra "O botão Importar foi bloqueado?" e arraste "Enviar ao Cifra Sync" para a barra de favoritos. Abra a cifra no Cifra Club normalmente e clique no favorito: ele lê a página no seu navegador e abre o Cifra Sync com título, artista e cifra preenchidos (via `#import=` na URL; nada passa por servidor). Funciona em navegadores de computador/tablet com barra de favoritos.
+O Cifra Club recusa buscas automáticas vindas de servidores, então o app não busca o link por conta própria. Em **Colar cifra**, arraste o botão **Enviar ao Cifra Sync** para a barra de favoritos (Cmd/Ctrl+Shift+B mostra a barra). Depois, com a cifra aberta no Cifra Club, clique no favorito: ele lê a página no seu navegador e abre o Cifra Sync com título, artista e cifra preenchidos (via `#import=` na URL; nada passa por servidor). Sem barra de favoritos (celular), copie o texto da cifra e cole na caixa.
 
 Use apenas para sua cifra pessoal: o conteúdo pertence ao Cifra Club e aos autores.
 
@@ -61,9 +59,7 @@ Nenhum áudio é baixado: o vídeo é só o player embutido da IFrame API.
 
 ```
 index.html  manifest.webmanifest  sw.js
-api/cifra.js     função serverless: busca a página do Cifra Club
 src/
-  cifraclub.js   valida o link e extrai título/artista/cifra do HTML
   parser.js      texto → seções e linhas (acordes com coluna + letra)
   chords.js      reconhecimento e transposição de acordes
   tap-tempo.js   BPM por toques (mediana, descarte de outliers), ½×/2×

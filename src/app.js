@@ -7,7 +7,6 @@ import { Metronome } from './metronome.js';
 import { VideoPlayer, extractVideoId } from './youtube.js';
 import * as store from './storage.js';
 import { DEMO_SONG } from './demo.js';
-import { isCifraClubUrl } from './cifraclub.js';
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -619,33 +618,6 @@ function updateParseInfo() {
 }
 $('#f-text').addEventListener('input', updateParseInfo);
 
-// ---------- importar do Cifra Club (via /api/cifra) ----------
-async function importFromCifraClub(url) {
-  const info = $('#parse-info');
-  const btn = $('#btn-import');
-  if (!isCifraClubUrl(url)) {
-    info.textContent = 'Cole um link no formato cifraclub.com.br/artista/musica/';
-    return;
-  }
-  if ($('#f-text').value.trim() && !confirm('Substituir a cifra que já está na caixa pela importada?')) return;
-  btn.disabled = true;
-  info.textContent = 'Buscando a cifra…';
-  try {
-    const r = await fetch('api/cifra?url=' + encodeURIComponent(url.trim()));
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error((data.error || 'Não foi possível importar.') + (r.status === 502 ? ' Alternativa: use o favorito de importação abaixo.' : ''));
-
-    $('#f-text').value = data.text;
-    if (data.title) $('#f-title').value = data.title;
-    if (data.artist) $('#f-artist').value = data.artist;
-    $('#f-cc').value = '';
-    updateParseInfo();
-  } catch (e) {
-    info.textContent = e instanceof TypeError ? 'Sem conexão com o servidor: a importação precisa de internet e do deploy com /api.' : e.message;
-  } finally {
-    btn.disabled = false;
-  }
-}
 // ---------- favorito de importação (roda no navegador do usuário, na página do Cifra Club) ----------
 function bookmarkletHref() {
   const code = `(()=>{var p=document.querySelector('pre');if(!p){alert('Não encontrei a cifra nesta página.');return}`
@@ -680,17 +652,12 @@ function importFromHash() {
   }
 }
 
-$('#btn-import').addEventListener('click', () => importFromCifraClub($('#f-cc').value));
-$('#f-cc').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); importFromCifraClub($('#f-cc').value); }
-});
-// colar só o link na caixa da cifra também importa
+// colar só um link do Cifra Club na caixa: o servidor não consegue ler a página, então orienta o favorito
 $('#f-text').addEventListener('paste', (e) => {
   const pasted = (e.clipboardData?.getData('text') ?? '').trim();
-  if (pasted && !pasted.includes('\n') && isCifraClubUrl(pasted)) {
+  if (pasted && !pasted.includes('\n') && /^https?:\/\/(www\.|m\.)?cifraclub\.com(\.br)?\//i.test(pasted)) {
     e.preventDefault();
-    $('#f-text').value = '';
-    importFromCifraClub(pasted);
+    $('#parse-info').textContent = 'Links não podem ser lidos pelo app. Abra a cifra no Cifra Club e clique no favorito “Enviar ao Cifra Sync” (acima), ou copie o texto da cifra e cole aqui.';
   }
 });
 

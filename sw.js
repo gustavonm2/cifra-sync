@@ -1,9 +1,9 @@
 // Service worker: guarda o app inteiro para uso offline (exceto o vídeo do YouTube).
-const CACHE = 'cifra-sync-v3';
+const CACHE = 'cifra-sync-v4';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'styles/app.css',
   'src/app.js', 'src/chords.js', 'src/parser.js', 'src/tap-tempo.js', 'src/timeline.js', 'src/markers.js',
-  'src/metronome.js', 'src/cifraclub.js', 'src/storage.js', 'src/youtube.js', 'src/demo.js',
+  'src/metronome.js', 'src/storage.js', 'src/youtube.js', 'src/demo.js',
   'fonts/jetbrains-mono-latin-400-normal.woff2', 'fonts/jetbrains-mono-latin-700-normal.woff2',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
 ];
