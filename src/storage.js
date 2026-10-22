@@ -23,22 +23,15 @@ const SETTINGS = 'cifrasync.settings';
 
 export const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
+/** Música com todos os campos; campos antigos (bpm, marcadores…) de versões anteriores são ignorados. */
 export function blankSong(over = {}) {
   return {
-    id: newId(),
-    title: '',
-    artist: '',
-    text: '',
-    url: '',
-    bpm: 92,
-    transpose: 0,
-    barsPerLine: 2,
-    meter: '4/4',
-    offset: 0,
-    shift: 0, // ajuste fino em segundos (+ adianta a cifra em relação ao vídeo)
-    markers: {},
-    sync: false,
-    ...over,
+    id: over.id ?? newId(),
+    title: over.title ?? '',
+    artist: over.artist ?? '',
+    text: over.text ?? '',
+    transpose: Number.isFinite(over.transpose) ? over.transpose : 0,
+    speed: Number.isFinite(over.speed) ? over.speed : 2.5, // segundos por acorde
   };
 }
 
@@ -46,5 +39,5 @@ export const loadSongs = () => read(SONGS, []).map((s) => blankSong(s));
 export const saveSongs = (songs) => write(SONGS, songs);
 export const loadCurrentId = () => read(CURRENT, null);
 export const saveCurrentId = (id) => write(CURRENT, id);
-export const loadSettings = () => ({ sound: true, fontSize: 28, ...read(SETTINGS, {}) });
+export const loadSettings = () => ({ fontSize: null, ...read(SETTINGS, {}) });
 export const saveSettings = (s) => write(SETTINGS, s);

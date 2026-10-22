@@ -1,9 +1,7 @@
 export const DEMO_SONG = {
   title: 'Música de exemplo',
   artist: 'Artista',
-  url: '',
-  bpm: 92,
-  barsPerLine: 2,
+  speed: 2.5,
   text: `[Intro]
 Am    F    C    G
 
