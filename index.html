@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12151a">
+  <title>Cifra Sync</title>
+  <meta name="description" content="Leitor de cifras que rola no ritmo do metrônomo e mostra o próximo acorde.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><g fill="#F2B84B"><rect x="2" y="9" width="3.4" height="11" rx="1.7"/><rect x="7.6" y="3" width="3.4" height="17" rx="1.7"/><rect x="13.2" y="7" width="3.4" height="13" rx="1.7"/><rect x="18.8" y="12" width="3.4" height="8" rx="1.7"/></g></svg>
+      <span>Cifra Sync</span>
+    </div>
+    <div class="song-head">
+      <strong id="song-title">—</strong>
+      <span id="song-sub"></span>
+    </div>
+    <div class="top-actions">
+      <button class="btn" id="btn-library" type="button">Biblioteca</button>
+      <button class="btn" id="btn-edit" type="button">Editar</button>
+      <button class="btn" id="btn-new" type="button">Colar cifra</button>
+      <div class="stepper" role="group" aria-label="Tom">
+        <button class="btn icon" id="key-down" type="button" aria-label="Baixar um semitom">−</button>
+        <span id="key-label" title="Tom">Tom —</span>
+        <button class="btn icon" id="key-up" type="button" aria-label="Subir um semitom">+</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="chart-pane">
+      <div class="next-mini" id="next-mini" aria-label="Próximos acordes"></div>
+      <div id="chart" aria-live="off"></div>
+      <div class="font-ctl" role="group" aria-label="Tamanho da letra">
+        <button class="btn icon" id="font-down" type="button" aria-label="Diminuir fonte">A−</button>
+        <button class="btn icon" id="font-up" type="button" aria-label="Aumentar fonte">A+</button>
+      </div>
+    </section>
+
+    <aside id="panel" class="panel" aria-label="Painel de controles">
+      <div class="card video-card">
+        <div id="video-host" class="video-host">
+          <div class="video-empty" id="video-empty">
+            <span id="video-msg">Cole o link do YouTube em “Editar”</span>
+            <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="none" stroke="currentColor" stroke-width="2"/><path d="M26 20l18 12-18 12z" fill="currentColor"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="card metro-card">
+        <div class="bpm-row">
+          <div class="bpm-box">
+            <input id="bpm" type="number" inputmode="numeric" min="20" max="300" step="1" value="92" aria-label="BPM">
+            <span class="bpm-unit">BPM</span>
+          </div>
+          <div class="bpm-btns">
+            <button class="btn" id="tap" type="button">Tap tempo</button>
+            <div class="pair">
+              <button class="btn" id="bpm-half" type="button" aria-label="Metade do BPM">½×</button>
+              <button class="btn" id="bpm-double" type="button" aria-label="Dobro do BPM">2×</button>
+            </div>
+          </div>
+        </div>
+        <div class="beats" id="beats" role="img" aria-label="Tempos do compasso"></div>
+        <div class="status" id="status">Compasso — · metrônomo livre</div>
+        <div class="row">
+          <label for="meter">Compasso</label>
+          <select id="meter" class="btn">
+            <option value="4/4">4/4</option>
+            <option value="3/4">3/4</option>
+            <option value="6/8">6/8</option>
+          </select>
+        </div>
+        <div class="row">
+          <span>Compassos por linha</span>
+          <div class="stepper"><button class="btn icon" id="bars-down" type="button" aria-label="Menos compassos por linha">−</button><output id="bars">2</output><button class="btn icon" id="bars-up" type="button" aria-label="Mais compassos por linha">+</button></div>
+        </div>
+        <div class="row">
+          <span title="Desloca a cifra em relação ao vídeo">Ajuste (batidas)</span>
+          <div class="stepper"><button class="btn icon" id="off-down" type="button" aria-label="Atrasar uma batida">−</button><output id="offset">0</output><button class="btn icon" id="off-up" type="button" aria-label="Adiantar uma batida">+</button></div>
+        </div>
+        <div class="row toggles">
+          <button class="btn toggle" id="sound" type="button" aria-pressed="true">Som: ligado</button>
+          <button class="btn toggle" id="sync" type="button" aria-pressed="false">Sincronizar com o vídeo</button>
+        </div>
+      </div>
+
+      <div class="card next-card">
+        <div class="card-head"><span>Próximos acordes</span><span id="next-eta"></span></div>
+        <div class="next-chords" id="next-main"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="transport">
+    <button class="play" id="play" type="button" aria-label="Tocar"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path id="play-icon" d="M8 5v14l11-7z" fill="currentColor"/></svg></button>
+    <button class="btn icon" id="restart" type="button" aria-label="Reiniciar" title="Reiniciar (R)">⟲</button>
+    <span class="time" id="time-now">0:00</span>
+    <div class="timeline" id="timeline" role="list" aria-label="Seções"></div>
+    <span class="time dim" id="time-total">0:00</span>
+    <button class="btn" id="mark" type="button">Marcar seção</button>
+    <button class="btn panel-toggle" id="panel-toggle" type="button" aria-expanded="false" aria-controls="panel">Painel</button>
+  </footer>
+
+  <dialog id="dlg-edit">
+    <form method="dialog" id="form-edit">
+      <h2 id="edit-heading">Colar cifra</h2>
+      <div class="grid2">
+        <label>Título<input id="f-title" type="text" autocomplete="off"></label>
+        <label>Artista<input id="f-artist" type="text" autocomplete="off"></label>
+      </div>
+      <label>Vídeo do YouTube (URL)<input id="f-url" type="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off"></label>
+      <label>Cifra e letra
+        <textarea id="f-text" rows="12" spellcheck="false" placeholder="[Intro] Am F C G&#10;&#10;[Primeira Parte]&#10;Am       F&#10;Letra da música…"></textarea>
+      </label>
+      <p class="hint" id="parse-info"></p>
+      <div class="dlg-actions">
+        <button class="btn danger" id="clear-markers" type="button">Limpar marcadores</button>
+        <span class="spacer"></span>
+        <button class="btn" value="cancel" formnovalidate>Cancelar</button>
+        <button class="btn primary" id="save-edit" value="save">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-library">
+    <form method="dialog">
+      <h2>Biblioteca</h2>
+      <ul id="library-list" class="library"></ul>
+      <div class="dlg-actions">
+        <button class="btn" id="lib-new" type="button">Nova música</button>
+        <span class="spacer"></span>
+        <button class="btn primary" value="close">Fechar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
