@@ -124,6 +124,8 @@ select.btn { appearance: none; padding: 0 14px; text-align: center; }
 .row.toggles { gap: 8px; padding-top: 4px; }
 .row.toggles .btn { flex: 1; padding: 0 8px; font-size: 14px; }
 
+.sync-hint { margin: 4px 0 8px; padding: 10px 12px; border-radius: 10px; background: var(--card-2); color: var(--text); font-size: 13px; line-height: 1.45; }
+.sync-hint b { color: var(--amber); }
 .card-head { display: flex; justify-content: space-between; color: var(--dim); font: 700 12px var(--sans); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 12px; }
 .card-head #next-eta { letter-spacing: 0; text-transform: none; font-weight: 500; }
 .next-chords { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }

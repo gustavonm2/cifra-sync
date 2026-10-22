@@ -1,5 +1,5 @@
 // Service worker: guarda o app inteiro para uso offline (exceto o vídeo do YouTube).
-const CACHE = 'cifra-sync-v4';
+const CACHE = 'cifra-sync-v5';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'styles/app.css',
   'src/app.js', 'src/chords.js', 'src/parser.js', 'src/tap-tempo.js', 'src/timeline.js', 'src/markers.js',

@@ -16,6 +16,16 @@ function tokenize(line) {
   return tokens;
 }
 
+/**
+ * Linha de tablatura (ex.: "e|---0---3--|", "B|--1-----|", "|--5h7--|"): só caracteres de tablatura
+ * e 3+ hífens seguidos (ou 2+ hífens com barras `|`). Tablaturas são descartadas porque não têm letra nem acordes.
+ */
+export function isTabLine(line) {
+  if (!/^\s*(?:[A-Ga-g][#b]?)?\s*[|:]?[\s\-|0-9hpbrxsvt/\\~()^.<>*=+]*$/.test(line)) return false;
+  const dashes = (line.match(/-/g) ?? []).length;
+  return /-{3,}/.test(line) || (dashes >= 2 && line.includes('|'));
+}
+
 /** Se a linha só tem acordes (e marcas como | ou x2), devolve os acordes com coluna; senão null. */
 export function parseChordLine(line) {
   const chords = [];
@@ -69,6 +79,8 @@ export function parseSong(text) {
       continue;
     }
 
+    if (isTabLine(row)) continue;
+
     const sec = matchSection(row);
     if (sec) {
       const restChords = sec.rest.trim() ? parseChordLine(sec.rest) : null;
@@ -85,7 +97,7 @@ export function parseSong(text) {
     const chords = parseChordLine(row);
     if (chords) {
       const next = rows[i + 1];
-      const nextIsLyric = next && next.trim() && !matchSection(next) && !parseChordLine(next);
+      const nextIsLyric = next && next.trim() && !matchSection(next) && !parseChordLine(next) && !isTabLine(next);
       if (nextIsLyric) {
         items.push({ kind: 'line', chords, lyric: next });
         i++;
@@ -98,8 +110,23 @@ export function parseSong(text) {
     items.push({ kind: 'line', chords: [], lyric: row });
   }
 
-  while (items.length && items[items.length - 1].kind === 'blank') items.pop();
-  return items;
+  return tidy(items);
+}
+
+/** Remove seções vazias (ex.: "[Tab - Solo]" cujo conteúdo era só tablatura) e brancos sobrando. */
+function tidy(items) {
+  const out = [];
+  items.forEach((it, i) => {
+    if (it.kind === 'section') {
+      let j = i + 1;
+      while (items[j]?.kind === 'blank') j++;
+      if (!items[j] || items[j].kind === 'section') return;
+    }
+    if (it.kind === 'blank' && (!out.length || out[out.length - 1].kind === 'blank')) return;
+    out.push(it);
+  });
+  while (out.length && out[out.length - 1].kind === 'blank') out.pop();
+  return out;
 }
 
 /** Primeiro acorde da música (usado como "tom"). */

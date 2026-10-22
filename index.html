@@ -85,6 +85,11 @@
           <span title="Desloca a cifra em relação ao vídeo">Ajuste (batidas)</span>
           <div class="stepper"><button class="btn icon" id="off-down" type="button" aria-label="Atrasar uma batida">−</button><output id="offset">0</output><button class="btn icon" id="off-up" type="button" aria-label="Adiantar uma batida">+</button></div>
         </div>
+        <div class="row">
+          <span title="Ajuste fino em milissegundos: + adianta a cifra, − atrasa">Ajuste fino (ms)</span>
+          <div class="stepper"><button class="btn icon" id="shift-down" type="button" aria-label="Atrasar 20 milissegundos">−</button><output id="shift">0</output><button class="btn icon" id="shift-up" type="button" aria-label="Adiantar 20 milissegundos">+</button></div>
+        </div>
+        <p class="sync-hint" id="sync-hint" hidden></p>
         <div class="row toggles">
           <button class="btn toggle" id="sound" type="button" aria-pressed="true">Som: ligado</button>
           <button class="btn toggle" id="sync" type="button" aria-pressed="false">Sincronizar com o vídeo</button>

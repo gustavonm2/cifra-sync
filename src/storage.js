@@ -35,6 +35,7 @@ export function blankSong(over = {}) {
     barsPerLine: 2,
     meter: '4/4',
     offset: 0,
+    shift: 0, // ajuste fino em segundos (+ adianta a cifra em relação ao vídeo)
     markers: {},
     sync: false,
     ...over,

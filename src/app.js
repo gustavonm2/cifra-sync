@@ -233,6 +233,7 @@ function syncControls() {
   dom.meter.value = song.meter;
   dom.bars.textContent = song.barsPerLine;
   dom.offset.textContent = (song.offset > 0 ? '+' : '') + song.offset;
+  $('#shift').textContent = (song.shift > 0 ? '+' : '') + Math.round(song.shift * 1000);
   dom.sound.setAttribute('aria-pressed', String(settings.sound));
   dom.sound.textContent = `Som: ${settings.sound ? 'ligado' : 'desligado'}`;
   dom.sync.setAttribute('aria-pressed', String(song.sync));
@@ -440,7 +441,22 @@ function nudgeOffset(d) {
 
 // ---------- sincronização com o vídeo ----------
 function videoBeat() {
-  return beatForVideoTime(tl, song.markers, song.bpm, video.time, song.offset);
+  return beatForVideoTime(tl, song.markers, song.bpm, video.time + song.shift, song.offset);
+}
+
+/** Texto de ajuda do modo sincronizado, conforme o que falta calibrar. */
+function updateSyncHint() {
+  const hint = $('#sync-hint');
+  let msg = '';
+  if (song.sync && video.available) {
+    const marked = Object.keys(song.markers).length;
+    if (!marked) msg = '<b>Calibrar:</b> 1) ajuste o BPM com <b>Tap tempo</b> batendo no ritmo da música; 2) toque em <b>Marcar seção</b> no instante em que a música começa.';
+    else if (marked < tl.sections.length) msg = `Marcadas ${marked} de ${tl.sections.length} seções. Toque em <b>Marcar seção</b> no começo de cada uma para manter a cifra alinhada.`;
+  }
+  if (msg === (updateSyncHint.last ?? '')) return;
+  updateSyncHint.last = msg;
+  hint.hidden = !msg;
+  hint.innerHTML = msg; // texto fixo, sem dados do usuário
 }
 
 function onVideoState(state) {
@@ -456,12 +472,17 @@ function onVideoState(state) {
 }
 
 setInterval(() => {
+  if (song && tl) updateSyncHint();
   if (!song?.sync || !video.available || !tl) return;
   const t = video.time;
-  const target = beatForVideoTime(tl, song.markers, song.bpm, t, song.offset);
+  const target = beatForVideoTime(tl, song.markers, song.bpm, t + song.shift, song.offset);
   if (video.playing) {
     if (!metro.running) metro.start(target);
-    else if (Math.abs(metro.beat - target) > 0.75) metro.setBeat(target); // deriva ou seek
+    else {
+      const diff = target - metro.beat;
+      if (Math.abs(diff) > 0.75) metro.setBeat(target); // seek ou deriva grande: salta
+      else if (Math.abs(diff) > 0.03) metro.slew(diff * 0.3); // deriva pequena: corrige aos poucos
+    }
   } else if (Math.abs(t - lastVideoTime) > 0.4) {
     metro.setBeat(target); // seek com o vídeo pausado
     manualScrollUntil = 0;
@@ -520,6 +541,14 @@ function setBars(n) {
 }
 $('#bars-down').addEventListener('click', () => setBars(song.barsPerLine - 1));
 $('#bars-up').addEventListener('click', () => setBars(song.barsPerLine + 1));
+function nudgeShift(ms) {
+  song.shift = Math.round((song.shift + ms / 1000) * 1000) / 1000;
+  $('#shift').textContent = (song.shift > 0 ? '+' : '') + Math.round(song.shift * 1000);
+  if (song.sync && video.available) metro.setBeat(videoBeat());
+  persist();
+}
+$('#shift-down').addEventListener('click', () => nudgeShift(-20));
+$('#shift-up').addEventListener('click', () => nudgeShift(20));
 $('#off-down').addEventListener('click', () => nudgeOffset(-1));
 $('#off-up').addEventListener('click', () => nudgeOffset(1));
 

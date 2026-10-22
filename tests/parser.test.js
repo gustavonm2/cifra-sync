@@ -91,3 +91,43 @@ test('espaços Unicode largos mantêm a coluna do acorde', () => {
   const [l] = parseSong('Am  F\nletra aqui').filter((i) => i.kind === 'line');
   assert.deepEqual(l.chords, [{ name: 'Am', col: 0 }, { name: 'F', col: 4 }]);
 });
+
+import { isTabLine } from '../src/parser.js';
+
+test('reconhece linhas de tablatura', () => {
+  for (const t of ['e|-----0---3-----|', 'B|--1---1-----|', 'G|-----0h2---|', 'E|---------3---|', '|--5h7--|', 'D ---0---2---', 'A|-2-2-----2/4---|']) {
+    assert.equal(isTabLine(t), true, t);
+  }
+  for (const t of ['Am F - G', 'Na beira da estrada', 'Am | F | C', '', '- - -', 'E a gente']) assert.equal(isTabLine(t), false, t);
+});
+
+test('tablaturas são descartadas junto com a seção que só tinha tablatura', () => {
+  const items = parseSong(`[Intro] Am F
+
+[Tab - Solo]
+e|-----0---3-----|
+B|--1---1-----1--|
+G|-----0-----2---|
+D|---2-----------|
+A|--0------------|
+E|---------------|
+
+[Verso]
+Am        F
+Letra um`);
+  assert.deepEqual(items.filter((i) => i.kind === 'section').map((i) => i.name), ['Intro', 'Verso']);
+  assert.ok(!JSON.stringify(items).includes('---'));
+  assert.equal(items.filter((i) => i.kind === 'line').length, 2);
+});
+
+test('tablatura entre acorde e letra não vira a letra do acorde', () => {
+  const items = parseSong('Am F\ne|---0---|\nLetra');
+  const lines = items.filter((i) => i.kind === 'line');
+  assert.equal(lines[0].lyric, null);
+  assert.equal(lines[1].lyric, 'Letra');
+});
+
+test('seções com tablatura no meio mantêm acordes e letra', () => {
+  const items = parseSong('[Solo]\nAm F\ne|--0--|\nB|--1--|\nPalavra');
+  assert.equal(items.filter((i) => i.kind === 'line').length, 2);
+});

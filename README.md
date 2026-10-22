@@ -39,8 +39,9 @@ Use apenas para sua cifra pessoal: o conteúdo pertence ao Cifra Club e aos auto
 
 1. Cole a URL do YouTube e espere o player aparecer.
 2. Ative **Sincronizar com o vídeo**: o play/pause/seek do vídeo passam a controlar o metrônomo e a cifra.
-3. **Marcar seção**: no instante em que cada seção começa no vídeo, toque no botão. Ele marca a primeira seção ainda sem marcador (depois, a atual, para corrigir). Os marcadores recalculam a posição da cifra a partir de cada seção, corrigindo a deriva de gravações sem andamento fixo.
-4. A linha do tempo embaixo é clicável: pula a cifra (e o vídeo, se sincronizado) para a seção. `Editar → Limpar marcadores` zera tudo.
+3. **Calibrar** (o app mostra essa dica enquanto faltar algo): ajuste o BPM com **Tap tempo** batendo no ritmo da música; depois use **Marcar seção** no instante exato em que a música começa. Sem essa marcação o app supõe que a música começa em 0:00 do vídeo, e a batida do metrônomo fica defasada. O **Ajuste fino (ms)** desloca a cifra em passos de 20 ms para encaixar o clique na batida.
+4. **Marcar seção**: no instante em que cada seção começa no vídeo, toque no botão. Ele marca a primeira seção ainda sem marcador (depois, a atual, para corrigir). Os marcadores recalculam a posição da cifra a partir de cada seção, corrigindo a deriva de gravações sem andamento fixo.
+5. A linha do tempo embaixo é clicável: pula a cifra (e o vídeo, se sincronizado) para a seção. `Editar → Limpar marcadores` zera tudo.
 
 Nenhum áudio é baixado: o vídeo é só o player embutido da IFrame API.
 
@@ -74,7 +75,9 @@ styles/app.css   fonts/ (JetBrains Mono, local)   icons/   scripts/   tests/
 
 ## Notas de projeto
 
-- **Metrônomo:** o relógio é o do `AudioContext`; os cliques são agendados ~120 ms à frente por um agendador de 25 ms. A posição da cifra é calculada continuamente a partir do relógio de áudio (não por contagem de timers), então não há jitter nem deriva entre clique e tela.
+- **Metrônomo:** a posição da cifra vem de um relógio próprio (`performance.now`), então ela anda mesmo que o navegador mantenha o áudio suspenso (o que acontece quando o play é apertado dentro do player do YouTube). Os cliques são agendados no `AudioContext` ~120 ms à frente por um agendador de 25 ms, convertendo o tempo do relógio para o do áudio.
 - **6/8:** o BPM conta colcheias (6 tempos por compasso, acento forte no 1 e médio no 4).
 - **Áudio no navegador:** o `AudioContext` só roda após um toque na página. Se o vídeo for iniciado direto no player do YouTube sem nenhum toque prévio, o app avisa para tocar na tela.
+- **Sincronia:** a posição vem do tempo do vídeo + marcadores. Pequenas diferenças são corrigidas aos poucos (sem pular o clique); diferenças maiores que ~0,75 batida (seek, mudança de seção) saltam.
+- **Tablaturas:** linhas como `e|---0---3--|` são descartadas ao interpretar a cifra, junto com seções que só tinham tablatura.
 - **Limites da v1:** seções repetidas ("Refrão 2x") não são expandidas — cada seção aparece uma vez, como na cifra colada; linhas só com letra (sem acordes) não consomem tempo; ao mudar o BPM no modo sincronizado, a cifra se realinha ao vídeo em até ~0,75 batida.
