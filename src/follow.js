@@ -17,6 +17,8 @@ export class Follower {
     this.cur = cur;
     this.speed = speed;
     this.t0 = now;
+    this.starts = [];
+    this.starts[cur] = now; // instante em que cada acorde começou (para gravar o andamento)
   }
 
   /** Posição fracionária (índice do acorde + fração), no instante `now` (s). */
@@ -27,6 +29,7 @@ export class Follower {
     while (elapsed >= 1 && this.cur < last && this.names[this.cur + 1] === this.names[this.cur]) {
       this.t0 += this.speed * (this.holds[this.cur] ?? 1);
       this.cur++;
+      this.starts[this.cur] = this.t0;
       elapsed = (now - this.t0) / (this.speed * (this.holds[this.cur] ?? 1));
     }
     return this.cur + Math.min(Math.max(elapsed, 0), HOLD_FRAC);
@@ -50,6 +53,7 @@ export class Follower {
       }
       this.cur = i;
       this.t0 = now - LATENCY;
+      this.starts[i] = this.t0;
       return { moved: skipped, speed: this.speed };
     }
     return { moved: 0, speed: this.speed };
@@ -59,6 +63,8 @@ export class Follower {
   seek(index, now) {
     this.cur = Math.max(0, Math.min(this.names.length - 1, index));
     this.t0 = now;
+    this.starts = []; // pulo manual invalida a gravação em andamento
+    this.starts[this.cur] = now;
   }
 }
 

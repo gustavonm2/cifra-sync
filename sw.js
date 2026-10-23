@@ -1,8 +1,8 @@
 // Service worker: guarda o app inteiro para uso offline.
-const CACHE = 'cifra-sync-v8';
+const CACHE = 'cifra-sync-v9';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'styles/app.css',
-  'src/app.js', 'src/chords.js', 'src/parser.js', 'src/steps.js', 'src/audio.js', 'src/follow.js', 'src/storage.js', 'src/demo.js',
+  'src/app.js', 'src/chords.js', 'src/parser.js', 'src/steps.js', 'src/audio.js', 'src/follow.js', 'src/harmony.js', 'src/timing.js', 'src/library.js', 'src/library-ui.js', 'src/cloud.js', 'src/config.js', 'src/storage.js', 'src/demo.js',
   'fonts/jetbrains-mono-latin-400-normal.woff2', 'fonts/jetbrains-mono-latin-700-normal.woff2',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
 ];

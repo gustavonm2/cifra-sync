@@ -22,14 +22,17 @@
       <span id="song-sub"></span>
     </div>
     <div class="acts">
-      <button class="btn" id="btn-library" type="button">Biblioteca</button>
+      <button class="btn" id="btn-library" type="button">Biblioteca <span class="cloud-dot" id="cloud-dot" data-state="off" aria-hidden="true"></span></button>
       <button class="btn" id="btn-edit" type="button">Editar</button>
       <button class="btn" id="btn-new" type="button">Colar cifra</button>
-      <div class="stepper" role="group" aria-label="Tom">
-        <button class="btn icon" id="key-down" type="button" aria-label="Baixar um semitom">−</button>
+      <div class="keybar" role="group" aria-label="Tom da música">
+        <button class="btn" id="key-m2" type="button" aria-label="Descer 1 tom" title="Descer 1 tom">−1</button>
+        <button class="btn" id="key-m1" type="button" aria-label="Descer meio tom" title="Descer meio tom">−½</button>
         <output id="key-label" title="Tom">Tom —</output>
-        <button class="btn icon" id="key-up" type="button" aria-label="Subir um semitom">+</button>
+        <button class="btn" id="key-p1" type="button" aria-label="Subir meio tom" title="Subir meio tom">+½</button>
+        <button class="btn" id="key-p2" type="button" aria-label="Subir 1 tom" title="Subir 1 tom">+1</button>
       </div>
+      <button class="btn toggle" id="simplify" type="button" aria-pressed="false" title="Troca acordes com sétima, nona, sus etc. por acordes simples do mesmo tom">Simplificar</button>
     </div>
   </header>
 
@@ -50,6 +53,7 @@
           <div class="stepper"><button class="btn icon" id="count-down" type="button" aria-label="Menos segundos">−</button><output id="count-val">3 s</output><button class="btn icon" id="count-up" type="button" aria-label="Mais segundos">+</button></div>
         </div>
         <button class="btn toggle wide" id="follow" type="button" aria-pressed="false">Seguir o meu áudio</button>
+        <button class="btn toggle wide" id="record" type="button" aria-pressed="false" hidden>Gravar o andamento ao tocar</button>
         <p class="hint" id="start-hint"></p>
         <div class="mic" id="mic" hidden>
           <div class="meter" aria-hidden="true"><i id="meter-i"></i></div>
@@ -64,6 +68,12 @@
           <div class="stepper"><button class="btn icon" id="hold-down" type="button" aria-label="Segurar menos">−</button><output id="hold-val">normal</output><button class="btn icon" id="hold-up" type="button" aria-label="Segurar mais">+</button></div>
         </div>
         <p class="hint">Para pausas, como o fim da estrofe: o acorde dura mais antes de a cifra mudar. Vale para o acorde atual; toque num acorde da fila para escolhê-lo.</p>
+      </div>
+
+      <div class="card" id="timing-card">
+        <div class="card-head"><span>Andamento da música</span></div>
+        <p class="hint" id="timing-info"></p>
+        <button class="btn wide" id="timing-clear" type="button" hidden>Apagar andamento gravado</button>
       </div>
 
       <div class="card chords-card">
@@ -105,6 +115,12 @@
         <button class="btn" type="button" data-s="1.5">Rápido</button>
       </span>
     </div>
+    <div class="run" id="run" hidden>
+      <button class="btn icon" id="run-prev" type="button" aria-label="Música anterior da playlist">◀</button>
+      <span id="run-info"></span>
+      <button class="btn icon" id="run-next" type="button" aria-label="Próxima música da playlist">▶</button>
+      <button class="btn icon" id="run-stop" type="button" aria-label="Sair da playlist">✕</button>
+    </div>
     <div class="fonts" role="group" aria-label="Tamanho da letra">
       <button class="btn icon" id="font-down" type="button" aria-label="Diminuir fonte">A−</button>
       <button class="btn icon" id="font-up" type="button" aria-label="Aumentar fonte">A+</button>
@@ -120,6 +136,8 @@
         <label>Título<input id="f-title" type="text" autocomplete="off"></label>
         <label>Artista<input id="f-artist" type="text" autocomplete="off"></label>
       </div>
+      <label>Estilo <input id="f-genre" type="text" autocomplete="off" list="genre-list" placeholder="Sertanejo, MPB, Rock…"></label>
+      <datalist id="genre-list"></datalist>
       <details class="bm-help" open>
         <summary>Importar do Cifra Club</summary>
         <p>1. Arraste este botão para a barra de favoritos do navegador: <a id="bookmarklet" class="btn" href="#" draggable="true">Enviar ao Cifra Sync</a></p>
@@ -138,16 +156,9 @@
     </form>
   </dialog>
 
-  <dialog id="dlg-library">
-    <form method="dialog">
-      <h2>Biblioteca</h2>
-      <ul id="library-list" class="library"></ul>
-      <div class="dlg-actions">
-        <button class="btn" id="lib-new" type="button">Nova música</button>
-        <span class="spacer"></span>
-        <button class="btn primary" value="close">Fechar</button>
-      </div>
-    </form>
+  <dialog id="dlg-library" class="wide">
+    <div id="lib-body"></div>
+    <form method="dialog" class="dlg-foot"><button class="btn primary" value="close">Fechar</button></form>
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

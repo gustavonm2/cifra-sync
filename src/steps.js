@@ -49,19 +49,20 @@ export const HOLD_OPTIONS = [1, 1.5, 2, 3, 4, 6];
 export const durationOf = (secPerChord, holds, i) => secPerChord * (holds?.[i] ?? 1);
 
 /**
- * Avança `pos` em `dt` segundos. Cada acorde dura `secPerChord × holds[i]` (holds é opcional).
- * Devolve { pos, ended }.
+ * Avança `pos` em `dt` segundos. `dur` é um número (segundos por acorde) ou uma função i → duração do acorde i
+ * (ver timing.js). `holds` (opcional) multiplica a duração quando `dur` é número. Devolve { pos, ended }.
  */
-export function advance(pos, dt, secPerChord, count, holds = {}) {
+export function advance(pos, dt, dur, count, holds = {}) {
+  const durOf = typeof dur === 'function' ? dur : (i) => durationOf(dur, holds, i);
   let p = pos;
   let left = dt;
   const end = count - 1e-3;
   while (left > 1e-9) {
     const i = Math.floor(p);
-    const dur = durationOf(secPerChord, holds, i);
-    const toEnd = (i + 1 - p) * dur;
+    const d = durOf(i);
+    const toEnd = (i + 1 - p) * d;
     if (left < toEnd) {
-      p += left / dur;
+      p += left / d;
       left = 0;
     } else {
       left -= toEnd;

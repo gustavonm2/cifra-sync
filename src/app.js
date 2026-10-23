@@ -1,8 +1,14 @@
 import { parseSong, firstChord } from './parser.js';
-import { transposeChord, keyLabel, flatsForSong, chordNotes } from './chords.js';
-import { buildSteps, locate, advance, clampSeconds, slideProgress, slideFrom, durationOf, HOLD_OPTIONS } from './steps.js';
+import { transposeChord, flatsForSong, chordNotes } from './chords.js';
+import { genresOf, PRESET_GENRES } from './library.js';
+import { simplifyAll, keyName } from './harmony.js';
+import { buildSteps, locate, advance, clampSeconds, slideProgress, slideFrom, HOLD_OPTIONS } from './steps.js';
 import { ChordListener } from './audio.js';
 import { Follower } from './follow.js';
+import { durationsFromStarts, isValidTiming, durationFn } from './timing.js';
+import { Library, CloudClient } from './library.js';
+import { createLibraryUI } from './library-ui.js';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import * as store from './storage.js';
 import { DEMO_SONG } from './demo.js';
 
@@ -22,12 +28,22 @@ const dom = {
 
 // ---------- estado ----------
 const settings = store.loadSettings();
-let songs = store.loadSongs();
+const lib = new Library({
+  io: store,
+  cloud: new CloudClient({ url: SUPABASE_URL, key: SUPABASE_KEY }),
+  onChange: () => { libUI?.refresh(); updateCloudDot(); },
+});
+let libUI = null;
+let run = null; // playlist em execução: { id, index }
+let recording = false; // gravando a duração de cada acorde (seguindo o áudio)
+let durOf = () => 2.5; // duração (s) do acorde i
 let song = null;
 let items = [];
 let seq = { steps: [], lines: [], sections: [] };
 let first = null;
 let flats = false;
+let simp = null; // Map acorde original → simplificado (quando "Simplificar" está ligado)
+let songKey = null; // tom detectado, usado na simplificação
 let chips = [];
 let lineEls = [];
 let lefts = [];
@@ -48,12 +64,16 @@ const nowSec = () => performance.now() / 1000;
 const SILENCE_PAUSE = 6; // s sem tocar (seguindo o áudio) → espera você voltar
 
 // ---------- persistência ----------
-let saveTimer = null;
+/** Marca a música atual como alterada: salva no aparelho e sincroniza com a nuvem. */
 function persist() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    if (song && songs.includes(song)) store.saveSongs(songs);
-  }, 250);
+  if (song) lib.touchSong(song);
+}
+
+/** Duração de cada acorde: andamento gravado (se válido), senão velocidade × "segurar". */
+function refreshDur() {
+  const timing = song && isValidTiming(song.timing, seq.steps.length) ? song.timing : null;
+  durOf = durationFn({ speed: song?.speed ?? 2.5, holds: song?.holds ?? {}, timing });
+  refreshTimingCard();
 }
 
 function toast(msg, ms = 2800) {
@@ -74,9 +94,22 @@ function loadSong(s) {
   pos = 0;
   setSpeed(s.speed, false);
   build();
+  refreshDur();
+  updateRunBar();
+}
+
+function buildSimplification() {
+  simp = null;
+  songKey = null;
+  const names = [...new Set(seq.steps.map((st) => st.name))];
+  if (!names.length) return;
+  const all = simplifyAll(seq.steps.map((st) => st.name));
+  songKey = all.key;
+  if (song.simplified) simp = new Map(seq.steps.map((st, i) => [st.name, all.names[i]]));
 }
 
 function build() {
+  buildSimplification();
   flats = flatsForSong(first, song.transpose);
   renderChart();
   renderRibbon();
@@ -90,7 +123,7 @@ function build() {
   measure();
 }
 
-const chordName = (name) => transposeChord(name, song.transpose, flats);
+const chordName = (name) => transposeChord(simp?.get(name) ?? name, song.transpose, flats);
 
 function buildChordLine(chords) {
   const pre = el('pre', 'chords');
@@ -182,9 +215,10 @@ function measure() {
 
 function updateHeader() {
   $('#song-title').textContent = song.title || 'Sem título';
-  $('#song-sub').textContent = [song.artist, `${fmtSeconds(song.speed)} por acorde`].filter(Boolean).join(' · ');
-  $('#key-label').textContent = 'Tom ' + keyLabel(first, song.transpose);
-  $('#key-label').title = song.transpose ? `Transposto ${song.transpose > 0 ? '+' : ''}${song.transpose}` : 'Tom original';
+  $('#song-sub').textContent = [song.artist, song.genre, `${fmtSeconds(song.speed)} por acorde`, song.simplified ? 'simplificada' : ''].filter(Boolean).join(' · ');
+  $('#key-label').textContent = 'Tom ' + (first ? chordName(first).replace(/\/.*$/, '') : '—');
+  $('#key-label').title = (song.transpose ? `Transposto ${song.transpose > 0 ? '+' : ''}${song.transpose / 2} tom` : 'Tom original') + (songKey ? ` · campo de ${keyName(songKey)}` : '');
+  $('#simplify').setAttribute('aria-pressed', String(!!song.simplified));
 }
 
 // ---------- laço de animação ----------
@@ -201,9 +235,9 @@ function tick(dt, now) {
     if (follower) {
       pos = Math.min(follower.position(nowSec()), seq.steps.length - 1e-3);
       if (nowSec() - lastSoundAt > SILENCE_PAUSE) waitForPlayer('Parei de ouvir você.');
-      else if (pos >= seq.steps.length - 0.4 && follower.cur >= seq.steps.length - 1) finish();
+      else if (follower.cur >= seq.steps.length - 1 && nowSec() - follower.t0 > follower.speed * 1.2) finish();
     } else {
-      const r = advance(pos, dt, song.speed, seq.steps.length, song.holds);
+      const r = advance(pos, dt, durOf, seq.steps.length);
       pos = r.pos;
       if (r.ended) finish();
     }
@@ -214,7 +248,7 @@ function tick(dt, now) {
   // o deslocamento mostrado persegue o alvo, suavizando pulos (clique, acorde ouvido)
   const a = lefts[cur] ?? 0;
   const b = lefts[cur + 1] ?? a;
-  const target = a + (b - a) * slideProgress(frac, slideFrom(durationOf(song.speed, song.holds, cur)));
+  const target = a + (b - a) * slideProgress(frac, slideFrom(durOf(cur)));
   shownX += (target - shownX) * (1 - Math.exp(-dt * 16));
   if (Math.abs(target - shownX) < 0.3) shownX = target;
   dom.track.style.transform = `translateX(${-shownX}px)`;
@@ -415,12 +449,14 @@ function startRunning(heard) {
     pos = idx + (heard ? 0.2 / song.speed : 0);
     stopMic(); // sem seguir o áudio, o microfone só serviu para ouvir o 1º acorde
   }
+  recording = !!follower && settings.record;
   lastSoundAt = nowSec();
   setPlaying(true);
 }
 
 /** Parou de tocar: pausa e espera o acorde atual para continuar. */
 function waitForPlayer(why) {
+  recording = false; // parou no meio: a gravação em andamento é descartada
   if (follower) song.speed = clampSeconds(follower.speed);
   follower = null;
   setPlaying(false);
@@ -430,11 +466,34 @@ function waitForPlayer(why) {
 }
 
 function finish() {
+  const next = run && run.index < lib.playlistSongs(run.id).length - 1 ? lib.playlistSongs(run.id)[run.index + 1] : null;
+  const saved = recording ? finalizeRecording(true) : false;
   stopAll();
-  toast('Fim da cifra');
+  toast(saved ? 'Andamento gravado e salvo na música.' : next ? `Fim da cifra · próxima: ${next.title} (▶)` : 'Fim da cifra');
+}
+
+/** Transforma o que foi ouvido (início de cada acorde) em andamento salvo na música. */
+function finalizeRecording(finished) {
+  recording = false;
+  const f = follower;
+  if (!f) return false;
+  const last = seq.steps.length - 1;
+  const endTime = finished && f.cur >= last ? f.starts[last] + f.speed : null;
+  const timing = durationsFromStarts(f.starts, seq.steps.length, endTime);
+  if (!timing || !isValidTiming(timing, seq.steps.length)) {
+    toast('Gravação incompleta: o andamento não foi salvo. Toque a música inteira, sem pular.', 5000);
+    return false;
+  }
+  song.timing = timing;
+  setSpeed(timing.base, false);
+  persist();
+  refreshDur();
+  return true;
 }
 
 function stopAll() {
+  if (recording && follower) finalizeRecording(false);
+  recording = false;
   if (follower) {
     setSpeed(follower.speed);
     follower = null;
@@ -457,6 +516,7 @@ function setSpeed(v, save = true) {
   dom.rng.value = s;
   dom.speedVal.textContent = fmtSeconds(s);
   document.querySelectorAll('.presets .btn').forEach((b) => b.classList.toggle('on', Number(b.dataset.s) === s));
+  refreshDur();
   if (save) {
     updateHeader();
     persist();
@@ -481,6 +541,7 @@ function setHold(i, value) {
   chip?.querySelector('.hold')?.remove();
   if (chip && value > 1) chip.prepend(el('span', 'hold', holdLabel(value)));
   refreshHoldCard();
+  refreshDur();
   persist();
 }
 
@@ -493,14 +554,28 @@ function stepHold(d) {
 $('#hold-down').addEventListener('click', () => stepHold(-1));
 $('#hold-up').addEventListener('click', () => stepHold(1));
 
+/** Muda o tom em semitons (±1 = meio tom, ±2 = 1 tom), mantendo a posição e o seguimento do áudio. */
 function setTranspose(d) {
   song.transpose = Math.max(-11, Math.min(11, song.transpose + d));
+  rebuildKeepingPosition();
+  persist();
+}
+
+function rebuildKeepingPosition() {
   const keep = pos;
   const was = follower;
   build();
   pos = keep;
   if (was) follower = new Follower(displayNames(), { cur: Math.floor(keep), speed: was.speed, now: nowSec() - (keep % 1) * was.speed, holds: song.holds });
+}
+
+function toggleSimplify() {
+  song.simplified = !song.simplified;
+  rebuildKeepingPosition();
   persist();
+  toast(song.simplified
+    ? `Acordes simplificados${songKey ? ` (campo de ${keyName(songKey)})` : ''}.`
+    : 'Acordes originais.');
 }
 
 function setFont(d) {
@@ -532,6 +607,8 @@ function renderStartControls() {
   $('#count-row').hidden = settings.start !== 'count';
   $('#count-val').textContent = settings.countSec + ' s';
   $('#follow').setAttribute('aria-pressed', String(settings.follow));
+  $('#record').setAttribute('aria-pressed', String(settings.record));
+  $('#record').hidden = !settings.follow;
   $('#start-hint').textContent = HINTS[settings.start] + (settings.follow ? ' Depois, a cifra acompanha o que você toca e ajusta a velocidade sozinha.' : '');
 }
 document.querySelectorAll('[data-start]').forEach((b) => b.addEventListener('click', () => {
@@ -548,6 +625,11 @@ function stepCount(d) {
 }
 $('#count-down').addEventListener('click', () => stepCount(-1));
 $('#count-up').addEventListener('click', () => stepCount(1));
+$('#record').addEventListener('click', () => {
+  settings.record = !settings.record;
+  store.saveSettings(settings);
+  renderStartControls();
+});
 $('#follow').addEventListener('click', () => {
   settings.follow = !settings.follow;
   store.saveSettings(settings);
@@ -564,8 +646,11 @@ $('#speed-down').addEventListener('click', () => setSpeed(song.speed + 0.25)); /
 $('#speed-up').addEventListener('click', () => setSpeed(song.speed - 0.25)); // + = mais rápido
 dom.rng.addEventListener('input', () => setSpeed(Number(dom.rng.value)));
 document.querySelectorAll('.presets .btn').forEach((b) => b.addEventListener('click', () => setSpeed(Number(b.dataset.s))));
-$('#key-down').addEventListener('click', () => setTranspose(-1));
-$('#key-up').addEventListener('click', () => setTranspose(1));
+$('#key-m2').addEventListener('click', () => setTranspose(-2));
+$('#key-m1').addEventListener('click', () => setTranspose(-1));
+$('#key-p1').addEventListener('click', () => setTranspose(1));
+$('#key-p2').addEventListener('click', () => setTranspose(2));
+$('#simplify').addEventListener('click', toggleSimplify);
 $('#font-up').addEventListener('click', () => setFont(2));
 $('#font-down').addEventListener('click', () => setFont(-2));
 
@@ -601,6 +686,8 @@ function openEditor(target) {
   $('#edit-heading').textContent = target ? 'Editar música' : 'Colar cifra';
   $('#f-title').value = target?.title ?? '';
   $('#f-artist').value = target?.artist ?? '';
+  $('#f-genre').value = target?.genre ?? '';
+  fillGenreOptions();
   $('#f-text').value = target?.text ?? '';
   updateParseInfo();
   dlgEdit.showModal();
@@ -659,69 +746,138 @@ function importFromHash() {
   }
 }
 
+function fillGenreOptions() {
+  const dl = $('#genre-list');
+  dl.replaceChildren();
+  [...new Set([...genresOf(lib.visibleSongs), ...PRESET_GENRES])].sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach((g) => {
+    const o = el('option');
+    o.value = g;
+    dl.append(o);
+  });
+}
+
 $('#form-edit').addEventListener('submit', (e) => {
   if (e.submitter?.value !== 'save') return;
-  const target = editing ?? store.blankSong();
-  const before = editing ? buildSteps(parseSong(editing.text)).steps.length : 0;
-  Object.assign(target, {
+  const fields = {
     title: $('#f-title').value.trim() || 'Sem título',
     artist: $('#f-artist').value.trim(),
+    genre: $('#f-genre').value.trim(),
     text: $('#f-text').value,
-  });
-  if (editing && buildSteps(parseSong(target.text)).steps.length !== before) target.holds = {}; // índices mudaram
-  if (!songs.includes(target)) songs.unshift(target);
-  store.saveSongs(songs);
+  };
+  let target = editing;
+  if (target) {
+    const before = buildSteps(parseSong(target.text)).steps.length;
+    Object.assign(target, fields);
+    if (buildSteps(parseSong(target.text)).steps.length !== before) {
+      target.holds = {}; // os índices dos acordes mudaram
+      target.timing = null;
+    }
+    lib.touchSong(target);
+  } else {
+    target = lib.addSong(fields);
+  }
   loadSong(target);
 });
 
 $('#btn-new').addEventListener('click', () => openEditor(null));
 $('#btn-edit').addEventListener('click', () => openEditor(song));
 
-// ---------- biblioteca ----------
+// ---------- biblioteca e playlists ----------
 const dlgLib = $('#dlg-library');
-function renderLibrary() {
-  const list = $('#library-list');
-  list.replaceChildren();
-  if (!songs.length) list.append(el('li', 'empty', 'Nenhuma música salva.'));
-  songs.forEach((s) => {
-    const li = el('li', s === song ? 'current' : '');
-    const meta = el('div', 'meta');
-    meta.append(el('b', '', s.title || 'Sem título'), el('small', '', [s.artist, `${fmtSeconds(s.speed)} por acorde`].filter(Boolean).join(' · ')));
-    const open = el('button', 'btn primary', 'Abrir');
-    open.type = 'button';
-    open.addEventListener('click', () => { dlgLib.close(); loadSong(s); });
-    const edit = el('button', 'btn', 'Editar');
-    edit.type = 'button';
-    edit.addEventListener('click', () => { dlgLib.close(); openEditor(s); });
-    const del = el('button', 'btn icon', '🗑');
-    del.type = 'button';
-    del.setAttribute('aria-label', `Excluir ${s.title}`);
-    del.addEventListener('click', () => {
-      if (!confirm(`Excluir “${s.title}” da biblioteca?`)) return;
-      songs = songs.filter((x) => x !== s);
-      store.saveSongs(songs);
-      if (s === song) loadSong(songs[0] ?? makeDemo());
-      renderLibrary();
-    });
-    li.append(meta, open, edit, del);
-    list.append(li);
-  });
+libUI = createLibraryUI({
+  lib,
+  dlg: dlgLib,
+  body: $('#lib-body'),
+  currentSongId: () => song?.id,
+  onOpenSong: (s) => { run = null; dlgLib.close(); loadSong(s); },
+  onEditSong: (s) => { dlgLib.close(); openEditor(s); },
+  onNewSong: () => { dlgLib.close(); openEditor(null); },
+  onPlayPlaylist: (id) => { dlgLib.close(); playPlaylist(id, 0); },
+  onCodeChanged: () => {
+    // a música aberta pode não existir na biblioteca do código novo
+    if (!lib.song(song.id)) loadSong(lib.visibleSongs[0] ?? lib.addSong(DEMO_SONG));
+  },
+});
+$('#btn-library').addEventListener('click', () => libUI.open('list'));
+
+function updateCloudDot() {
+  const dot = $('#cloud-dot');
+  if (!dot) return;
+  const { state } = lib.status;
+  dot.dataset.state = lib.cloudOn ? state : 'off';
+  dot.title = { ok: 'Sincronizado com a nuvem', syncing: 'Sincronizando…', offline: 'Sem internet: salvo neste aparelho', error: 'Erro na nuvem: ' + lib.status.message, idle: 'Nuvem pronta', off: 'Só neste aparelho' }[dot.dataset.state];
 }
-$('#btn-library').addEventListener('click', () => { renderLibrary(); dlgLib.showModal(); });
-$('#lib-new').addEventListener('click', () => { dlgLib.close(); openEditor(null); });
+
+/** Toca uma playlist a partir da música `index`. */
+function playPlaylist(id, index) {
+  const songs = lib.playlistSongs(id);
+  if (!songs.length) return toast('Esta playlist está vazia.');
+  run = { id, index: Math.max(0, Math.min(songs.length - 1, index)) };
+  loadSong(songs[run.index]);
+}
+
+function runStep(d) {
+  if (!run) return;
+  const songs = lib.playlistSongs(run.id);
+  const i = run.index + d;
+  if (i < 0 || i >= songs.length) return toast(d > 0 ? 'Fim da playlist.' : 'Início da playlist.');
+  playPlaylist(run.id, i);
+}
+
+function updateRunBar() {
+  const bar = $('#run');
+  if (!run || !lib.playlist(run.id)) {
+    run = null;
+    bar.hidden = true;
+    return;
+  }
+  const p = lib.playlist(run.id);
+  const songs = lib.playlistSongs(run.id);
+  const idx = songs.findIndex((s) => s.id === song.id);
+  if (idx < 0) {
+    run = null;
+    bar.hidden = true;
+    return;
+  }
+  run.index = idx;
+  bar.hidden = false;
+  $('#run-info').textContent = `${p.name} · ${idx + 1}/${songs.length}`;
+  $('#run-prev').disabled = idx === 0;
+  $('#run-next').disabled = idx === songs.length - 1;
+}
+$('#run-prev').addEventListener('click', () => runStep(-1));
+$('#run-next').addEventListener('click', () => runStep(1));
+$('#run-stop').addEventListener('click', () => { run = null; updateRunBar(); });
+
+// ---------- andamento gravado ----------
+function refreshTimingCard() {
+  const info = $('#timing-info');
+  if (!info) return;
+  const ok = song && isValidTiming(song.timing, seq.steps.length);
+  if (ok) {
+    info.textContent = `Gravado: ${seq.steps.length} acordes, média de ${fmtSeconds(song.timing.base)}. A cifra repete esse tempo; a velocidade acelera ou desacelera tudo na mesma proporção.`;
+  } else if (song?.timing) {
+    info.textContent = 'O andamento gravado não combina mais com esta cifra (ela foi alterada). Grave de novo.';
+  } else {
+    info.textContent = 'Nenhum andamento gravado. Ative “Gravar o andamento ao tocar” e “Seguir o meu áudio”, toque a música inteira uma vez, e o tempo de cada acorde fica salvo com a música.';
+  }
+  $('#timing-clear').hidden = !song?.timing;
+}
+$('#timing-clear').addEventListener('click', () => {
+  if (!song.timing || !confirm('Apagar o andamento gravado desta música?')) return;
+  song.timing = null;
+  persist();
+  refreshDur();
+});
 
 // ---------- início ----------
-function makeDemo() {
-  const s = store.blankSong(DEMO_SONG);
-  songs.unshift(s);
-  store.saveSongs(songs);
-  return s;
-}
-
 function boot() {
   if (settings.fontSize) document.documentElement.style.setProperty('--fs', settings.fontSize + 'px');
-  if (!songs.length) makeDemo();
-  loadSong(songs.find((s) => s.id === store.loadCurrentId()) ?? songs[0]);
+  if (!lib.visibleSongs.length) lib.addSong(DEMO_SONG);
+  loadSong(lib.song(lib.resolveId(store.loadCurrentId())) ?? lib.visibleSongs[0]);
+  updateCloudDot();
+  lib.sync();
+  addEventListener('online', () => lib.sync());
   requestAnimationFrame(frame);
   importFromHash();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
