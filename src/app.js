@@ -1,6 +1,8 @@
 import { parseSong, firstChord } from './parser.js';
-import { transposeChord, keyLabel, flatsForSong } from './chords.js';
+import { transposeChord, keyLabel, flatsForSong, chordNotes } from './chords.js';
 import { buildSteps, locate, advance, clampSeconds, slideProgress, MIN_SECONDS, MAX_SECONDS } from './steps.js';
+import { ChordListener } from './audio.js';
+import { Follower } from './follow.js';
 import * as store from './storage.js';
 import { DEMO_SONG } from './demo.js';
 
@@ -34,8 +36,16 @@ let playing = false;
 let view = {};
 let lastFrame = performance.now();
 let scrollTarget = 0;
+let shownX = 0;
 let manualScrollUntil = 0;
 let wakeLock = null;
+let phase = 'idle'; // 'idle' | 'starting' | 'counting' | 'arming' | 'playing'
+let countdownEnd = 0;
+let follower = null;
+let listener = null;
+let lastSoundAt = 0;
+const nowSec = () => performance.now() / 1000;
+const SILENCE_PAUSE = 6; // s sem tocar (seguindo o áudio) → espera você voltar
 
 // ---------- persistência ----------
 let saveTimer = null;
@@ -55,7 +65,7 @@ function toast(msg, ms = 2800) {
 
 // ---------- carregar música ----------
 function loadSong(s) {
-  setPlaying(false);
+  stopAll();
   song = s;
   store.saveCurrentId(s.id);
   items = parseSong(s.text);
@@ -70,6 +80,9 @@ function build() {
   flats = flatsForSong(first, song.transpose);
   renderChart();
   renderRibbon();
+  renderChordList();
+  listener?.setVocabulary(displayNames());
+  follower = null;
   updateHeader();
   view = {};
   dom.chart.scrollTop = 0;
@@ -139,6 +152,28 @@ function renderRibbon() {
   });
 }
 
+const displayNames = () => seq.steps.map((st) => chordName(st.name));
+let chordButtons = new Map();
+
+/** Caixa lateral: cada acorde diferente da música, com as notas dele; clicar pula para a 1ª vez em que aparece. */
+function renderChordList() {
+  const list = $('#chord-list');
+  list.replaceChildren();
+  chordButtons = new Map();
+  const names = displayNames();
+  const unique = [...new Set(names)];
+  $('#chord-count').textContent = unique.length ? `${unique.length} acordes` : '';
+  unique.forEach((name) => {
+    const count = names.filter((n) => n === name).length;
+    const b = el('button', 'cc');
+    b.type = 'button';
+    b.append(el('b', '', name), el('small', '', `×${count}`), el('span', 'notes', chordNotes(name, flats).join(' · ')));
+    b.addEventListener('click', () => jump(names.indexOf(name)));
+    list.append(b);
+    chordButtons.set(name, b);
+  });
+}
+
 function measure() {
   const anchor = parseFloat(getComputedStyle(dom.track).paddingLeft) || 0;
   lefts = chips.map((c) => c.offsetLeft - anchor);
@@ -160,20 +195,28 @@ function frame(now) {
 }
 
 function tick(dt, now) {
+  if (phase === 'counting') updateCountdown();
   if (playing) {
-    const r = advance(pos, dt, song.speed, seq.steps.length);
-    pos = r.pos;
-    if (r.ended) {
-      setPlaying(false);
-      toast('Fim da cifra');
+    if (follower) {
+      pos = Math.min(follower.position(nowSec()), seq.steps.length - 1e-3);
+      if (nowSec() - lastSoundAt > SILENCE_PAUSE) waitForPlayer('Parei de ouvir você.');
+      else if (pos >= seq.steps.length - 0.4 && follower.cur >= seq.steps.length - 1) finish();
+    } else {
+      const r = advance(pos, dt, song.speed, seq.steps.length);
+      pos = r.pos;
+      if (r.ended) finish();
     }
   }
   const { cur, frac } = locate(seq.steps.length, pos);
 
-  // a fila fica parada no acorde e desliza para o próximo no fim do tempo dele
+  // a fila fica parada no acorde e desliza para o próximo no fim do tempo dele;
+  // o deslocamento mostrado persegue o alvo, suavizando pulos (clique, acorde ouvido)
   const a = lefts[cur] ?? 0;
   const b = lefts[cur + 1] ?? a;
-  dom.track.style.transform = `translateX(${-(a + (b - a) * slideProgress(frac))}px)`;
+  const target = a + (b - a) * slideProgress(frac);
+  shownX += (target - shownX) * (1 - Math.exp(-dt * 16));
+  if (Math.abs(target - shownX) < 0.3) shownX = target;
+  dom.track.style.transform = `translateX(${-shownX}px)`;
 
   if (cur !== view.cur) {
     view.cur = cur;
@@ -192,7 +235,23 @@ function tick(dt, now) {
       s.classList.toggle('nxt', i === st.chordIdx + 1);
     });
     dom.meta.textContent = `${cur + 1} / ${seq.steps.length}`;
+    const names = displayNames();
+    chordButtons.forEach((btn, name) => {
+      btn.classList.toggle('cur', name === names[cur]);
+      btn.classList.toggle('next', name === names[cur + 1] && name !== names[cur]);
+    });
+    chordButtons.get(names[cur])?.scrollIntoView?.({ block: 'nearest' });
     computeScrollTarget(st.lineIdx);
+  }
+  if (follower) {
+    const txt = `~${fmtSeconds(follower.speed.toFixed(1))}`; // velocidade que o app está medindo no seu toque
+    if (txt !== view.speedTxt) {
+      view.speedTxt = txt;
+      dom.speedVal.textContent = txt;
+    }
+  } else if (view.speedTxt) {
+    view.speedTxt = null;
+    dom.speedVal.textContent = fmtSeconds(song.speed);
   }
   const fill = chips[cur]?.querySelector('.fill i');
   if (fill) fill.style.transform = `scaleX(${frac})`;
@@ -226,9 +285,9 @@ for (const ev of ['wheel', 'touchstart', 'touchmove']) {
 // ---------- controles ----------
 function setPlaying(p) {
   playing = p;
-  dom.playIcon.setAttribute('d', p ? 'M7 5h4v14H7zM13 5h4v14h-4z' : 'M8 5v14l11-7z');
-  dom.play.setAttribute('aria-label', p ? 'Pausar' : 'Tocar');
-  keepAwake(p);
+  dom.playIcon.setAttribute('d', p || phase !== 'idle' ? 'M7 5h4v14H7zM13 5h4v14h-4z' : 'M8 5v14l11-7z');
+  dom.play.setAttribute('aria-label', p || phase !== 'idle' ? 'Pausar' : 'Tocar');
+  keepAwake(p || phase !== 'idle');
 }
 
 /** Mantém a tela acesa enquanto a cifra anda (suporte de partitura). */
@@ -247,20 +306,152 @@ async function keepAwake(on) {
 function jump(i) {
   if (!seq.steps.length) return;
   pos = Math.max(0, Math.min(seq.steps.length - 1, i));
+  follower?.seek(Math.floor(pos), nowSec());
   manualScrollUntil = 0;
   view.cur = -1;
 }
 const stepBy = (d) => jump(Math.floor(pos) + d);
 
-function togglePlay() {
+// ---------- início: direto, contagem ou ouvindo o primeiro acorde ----------
+const needsMic = () => settings.start === 'listen' || settings.follow;
+
+function ensureListener() {
+  if (listener) return listener;
+  listener = new ChordListener({
+    onChord: (name, score, strength) => {
+      $('#heard').textContent = `${name} · ${Math.round(score * 100)}%`;
+      if (phase === 'arming') {
+        if (name === displayNames()[Math.floor(pos)]) startRunning(true);
+      } else if (phase === 'playing' && follower) {
+        follower.hear(name, strength, nowSec());
+      }
+    },
+    onLevel: (rms, gate) => {
+      const w = Math.min(1, rms / 0.15) * 100 + '%';
+      const hot = rms >= gate;
+      for (const id of ['#meter-i', '#ov-meter-i']) {
+        $(id).style.width = w;
+        $(id).classList.toggle('hot', hot);
+      }
+      if (hot) lastSoundAt = nowSec();
+    },
+  });
+  listener.setVocabulary(displayNames());
+  return listener;
+}
+
+async function startMic() {
+  try {
+    await ensureListener().start();
+    lastSoundAt = nowSec();
+    $('#mic').hidden = false;
+    return true;
+  } catch (e) {
+    toast(e.message, 5000);
+    return false;
+  }
+}
+
+function stopMic() {
+  listener?.stop();
+  $('#mic').hidden = true;
+  $('#heard').textContent = 'ouvindo…';
+}
+
+function showOverlay({ label, big = null, chord = null, sub = '', mic = false, now = false }) {
+  $('#ov-label').textContent = label;
+  $('#ov-big').hidden = big === null;
+  $('#ov-big').textContent = big ?? '';
+  $('#ov-chord').hidden = chord === null;
+  $('#ov-chord').textContent = chord ?? '';
+  $('#ov-sub').textContent = sub;
+  $('#ov-mic').hidden = !mic;
+  $('#ov-now').hidden = !now;
+  $('#overlay').hidden = false;
+}
+const hideOverlay = () => { $('#overlay').hidden = true; };
+
+async function begin() {
   if (!seq.steps.length) return toast('Cole uma cifra primeiro');
-  if (!playing && pos >= seq.steps.length - 0.01) jump(0); // só reinicia se a cifra já terminou
-  setPlaying(!playing);
+  if (pos >= seq.steps.length - 0.01) jump(0);
+  phase = 'starting'; // bloqueia novo play enquanto o microfone é aberto
+  setPlaying(false);
+  if (needsMic() && !(await startMic())) {
+    if (settings.start === 'listen') return stopAll();
+    toast('Seguindo sem o microfone: velocidade manual.');
+  }
+  if (phase !== 'starting') return; // cancelado enquanto pedia o microfone
+  if (settings.start === 'count') {
+    phase = 'counting';
+    countdownEnd = performance.now() + settings.countSec * 1000;
+    showOverlay({ label: 'Prepare-se', big: String(settings.countSec), chord: displayNames()[Math.floor(pos)], sub: 'A cifra começa quando chegar a zero.', now: true });
+  } else if (settings.start === 'listen') {
+    phase = 'arming';
+    showOverlay({ label: 'Toque para começar', chord: displayNames()[Math.floor(pos)], sub: 'A cifra começa quando eu ouvir esse acorde.', mic: true, now: true });
+  } else {
+    startRunning(false);
+  }
+  if (phase !== 'playing') setPlaying(false); // atualiza o ícone nos modos de espera
+}
+
+function updateCountdown() {
+  const left = (countdownEnd - performance.now()) / 1000;
+  if (left <= 0) return startRunning(false);
+  const n = String(Math.ceil(left));
+  if ($('#ov-big').textContent !== n) $('#ov-big').textContent = n;
+}
+
+/** Começa a andar. heard = true quando o acorde foi ouvido (já passaram ~0,2 s do início dele). */
+function startRunning(heard) {
+  hideOverlay();
+  phase = 'playing';
+  const idx = Math.floor(pos);
+  if (settings.follow) {
+    follower = new Follower(displayNames(), { cur: idx, speed: song.speed, now: nowSec() - (heard ? 0.2 : 0) });
+  } else {
+    follower = null;
+    pos = idx + (heard ? 0.2 / song.speed : 0);
+    stopMic(); // sem seguir o áudio, o microfone só serviu para ouvir o 1º acorde
+  }
+  lastSoundAt = nowSec();
+  setPlaying(true);
+}
+
+/** Parou de tocar: pausa e espera o acorde atual para continuar. */
+function waitForPlayer(why) {
+  if (follower) song.speed = clampSeconds(follower.speed);
+  follower = null;
+  setPlaying(false);
+  phase = 'arming';
+  showOverlay({ label: why, chord: displayNames()[Math.floor(pos)], sub: 'Toque esse acorde para continuar.', mic: true, now: true });
+  setPlaying(false);
+}
+
+function finish() {
+  stopAll();
+  toast('Fim da cifra');
+}
+
+function stopAll() {
+  if (follower) {
+    setSpeed(follower.speed);
+    follower = null;
+  }
+  phase = 'idle';
+  hideOverlay();
+  stopMic();
+  setPlaying(false);
+}
+
+function togglePlay() {
+  if (phase !== 'idle') return stopAll();
+  begin();
 }
 
 function setSpeed(v, save = true) {
   const s = clampSeconds(v);
   song.speed = s;
+  if (follower) follower.speed = s;
   dom.rng.value = s;
   dom.speedVal.textContent = fmtSeconds(s);
   document.querySelectorAll('.presets .btn').forEach((b) => b.classList.toggle('on', Number(b.dataset.s) === s));
@@ -273,8 +464,10 @@ function setSpeed(v, save = true) {
 function setTranspose(d) {
   song.transpose = Math.max(-11, Math.min(11, song.transpose + d));
   const keep = pos;
+  const was = follower;
   build();
   pos = keep;
+  if (was) follower = new Follower(displayNames(), { cur: Math.floor(keep), speed: was.speed, now: nowSec() - (keep % 1) * was.speed });
   persist();
 }
 
@@ -290,6 +483,49 @@ function setFont(d) {
 }
 
 dom.play.addEventListener('click', togglePlay);
+$('#ov-cancel').addEventListener('click', stopAll);
+$('#ov-now').addEventListener('click', () => startRunning(false));
+$('#side-toggle').addEventListener('click', () => {
+  const open = document.body.classList.toggle('side-open');
+  $('#side-toggle').setAttribute('aria-expanded', String(open));
+});
+
+const HINTS = {
+  now: 'A cifra começa a andar assim que você der play.',
+  count: 'Contagem regressiva antes de a cifra começar a andar.',
+  listen: 'Dê play e toque o primeiro acorde: a cifra começa quando o app ouvir (usa o microfone).',
+};
+function renderStartControls() {
+  document.querySelectorAll('[data-start]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.start === settings.start)));
+  $('#count-row').hidden = settings.start !== 'count';
+  $('#count-val').textContent = settings.countSec + ' s';
+  $('#follow').setAttribute('aria-pressed', String(settings.follow));
+  $('#start-hint').textContent = HINTS[settings.start] + (settings.follow ? ' Depois, a cifra acompanha o que você toca e ajusta a velocidade sozinha.' : '');
+}
+document.querySelectorAll('[data-start]').forEach((b) => b.addEventListener('click', () => {
+  settings.start = b.dataset.start;
+  store.saveSettings(settings);
+  renderStartControls();
+}));
+function stepCount(d) {
+  const opts = [3, 5, 10, 15];
+  const i = Math.max(0, Math.min(opts.length - 1, opts.indexOf(settings.countSec) + d));
+  settings.countSec = opts[i];
+  store.saveSettings(settings);
+  renderStartControls();
+}
+$('#count-down').addEventListener('click', () => stepCount(-1));
+$('#count-up').addEventListener('click', () => stepCount(1));
+$('#follow').addEventListener('click', () => {
+  settings.follow = !settings.follow;
+  store.saveSettings(settings);
+  renderStartControls();
+  if (settings.follow && !navigator.mediaDevices?.getUserMedia) toast('Este navegador não permite usar o microfone aqui (precisa de HTTPS).', 5000);
+});
+renderStartControls();
+
+// altura da barra inferior (usada pela gaveta no celular)
+new ResizeObserver(() => document.documentElement.style.setProperty('--bar-h', $('.bar').offsetHeight + 'px')).observe($('.bar'));
 $('#prev').addEventListener('click', () => stepBy(-1));
 $('#next').addEventListener('click', () => stepBy(1));
 $('#speed-down').addEventListener('click', () => setSpeed(song.speed + 0.25)); // − = mais lento
@@ -304,6 +540,7 @@ $('#font-down').addEventListener('click', () => setFont(-2));
 document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.target.closest?.('input, textarea, select, dialog[open]')) return;
+  if (e.key === 'Escape' && phase !== 'idle') return stopAll();
   if (e.key === ' ' && e.target.closest?.('button')) return; // espaço no botão focado aciona o próprio botão
   const action = {
     ' ': togglePlay,

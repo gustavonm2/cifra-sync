@@ -39,5 +39,5 @@ export const loadSongs = () => read(SONGS, []).map((s) => blankSong(s));
 export const saveSongs = (songs) => write(SONGS, songs);
 export const loadCurrentId = () => read(CURRENT, null);
 export const saveCurrentId = (id) => write(CURRENT, id);
-export const loadSettings = () => ({ fontSize: null, ...read(SETTINGS, {}) });
+export const loadSettings = () => ({ fontSize: null, start: 'count', countSec: 3, follow: false, ...read(SETTINGS, {}) });
 export const saveSettings = (s) => write(SETTINGS, s);

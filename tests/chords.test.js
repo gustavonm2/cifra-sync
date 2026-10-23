@@ -56,3 +56,41 @@ test('tom e preferência de bemóis', () => {
   assert.equal(flatsForSong('C', 5), true);
   assert.equal(flatsForSong('C', 7), false);
 });
+
+import { chordNotes, chordPitchClasses } from '../src/chords.js';
+
+test('notas das tríades', () => {
+  assert.deepEqual(chordNotes('Am'), ['A', 'C', 'E']);
+  assert.deepEqual(chordNotes('C'), ['C', 'E', 'G']);
+  assert.deepEqual(chordNotes('F#m'), ['F#', 'A', 'C#']);
+  assert.deepEqual(chordNotes('Bdim'), ['B', 'D', 'F']);
+  assert.deepEqual(chordNotes('Caug'), ['C', 'E', 'G#']);
+  assert.deepEqual(chordNotes('Dsus4'), ['D', 'G', 'A']);
+  assert.deepEqual(chordNotes('Dsus2'), ['D', 'E', 'A']);
+});
+
+test('notas com sétima, sexta e nona', () => {
+  assert.deepEqual(chordNotes('G7'), ['G', 'B', 'D', 'F']);
+  assert.deepEqual(chordNotes('Am7'), ['A', 'C', 'E', 'G']);
+  assert.deepEqual(chordNotes('G7M'), ['G', 'B', 'D', 'F#']);
+  assert.deepEqual(chordNotes('Cmaj7'), ['C', 'E', 'G', 'B']);
+  assert.deepEqual(chordNotes('Cm6'), ['C', 'D#', 'G', 'A']);
+  assert.deepEqual(chordNotes('G6'), ['G', 'B', 'D', 'E']);
+  assert.deepEqual(chordNotes('Cadd9'), ['C', 'D', 'E', 'G']);
+  assert.deepEqual(chordNotes('E7(9)'), ['E', 'F#', 'G#', 'B', 'D']);
+  assert.deepEqual(chordNotes('Bm7(b5)'), ['B', 'D', 'F', 'A']);
+  assert.deepEqual(chordNotes('Bm7b5'), ['B', 'D', 'F', 'A']);
+});
+
+test('baixo invertido vem primeiro; bemóis opcionais', () => {
+  assert.deepEqual(chordNotes('C/G'), ['G', 'C', 'E']);
+  assert.deepEqual(chordNotes('C/E'), ['E', 'C', 'G']);
+  assert.deepEqual(chordNotes('Bb', true), ['Bb', 'D', 'F']);
+  assert.deepEqual(chordNotes('Bb', false), ['A#', 'D', 'F']);
+});
+
+test('chordPitchClasses entrega raiz, baixo e classes de altura', () => {
+  assert.deepEqual(chordPitchClasses('Am'), { root: 9, pcs: [9, 0, 4], bass: 9, intervals: [0, 3, 7] });
+  assert.equal(chordPitchClasses('C/G').bass, 7);
+  assert.equal(chordPitchClasses('xyz'), null);
+});

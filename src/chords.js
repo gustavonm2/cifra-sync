@@ -70,3 +70,68 @@ export function flatsForSong(firstChord, semitones) {
   if (!c) return false;
   return preferFlats((noteIndex(c.root) + semitones + 12) % 12, isMinor(firstChord));
 }
+
+// ---------- notas de cada acorde ----------
+
+/**
+ * Intervalos (em semitons a partir da raiz) de um acorde, a partir do sufixo.
+ * Cobre tríades (maior, menor, dim, aug, sus2/sus4), sextas, sétimas (7, 7M/maj7), nonas e extensões comuns.
+ */
+function chordIntervals(suffix) {
+  const s = suffix.replace(/\(([^)]*)\)/g, ',$1,'); // (b5), (9) → ,b5, ,9, (separa os números)
+  const has = (re) => re.test(s);
+  const minor = has(/^(m(?!aj)|min|-)/);
+  const dim = has(/dim|°|º|ø/);
+  const half = /ø|m7\(?b5\)?/.test(suffix);
+  const aug = has(/aug|\+/) && !has(/^\+\d/);
+  const sus2 = has(/sus2/);
+  const sus4 = has(/sus4|sus(?!2)/);
+
+  let third = minor || dim ? 3 : 4;
+  if (sus2) third = 2;
+  else if (sus4) third = 5;
+  let fifth = dim ? 6 : aug ? 8 : 7;
+  const out = new Set([0, third]);
+
+  const maj7 = has(/maj|7M|M7|Δ/);
+  const dim7 = has(/dim7|°7|º7/);
+  const num = (n) => new RegExp(`(?<!add)(?<![#b\\d])${n}(?!\\d)`).test(s);
+
+  if (has(/b5/)) fifth = 6;
+  if (has(/#5/)) fifth = 8;
+  out.add(fifth);
+
+  if (half) out.add(10);
+  else if (dim7) out.add(9);
+  else if (maj7) out.add(11);
+  else if (num(7) || num(9) || num(11) || num(13)) out.add(10);
+
+  if (num(6) || num(13)) out.add(9);
+  if (num(9) || has(/add9|add2/)) out.add(2);
+  if (has(/b9/)) out.add(1);
+  if (has(/#9/)) out.add(3);
+  if (num(11) || has(/add11|add4/)) out.add(5);
+  if (has(/#11/)) out.add(6);
+  return [...out].sort((a, b) => a - b);
+}
+
+/** Classes de altura do acorde: { root, pcs: [0–11...], bass, intervals } ou null. */
+export function chordPitchClasses(token) {
+  const c = parseChord(token);
+  if (!c) return null;
+  const root = noteIndex(c.root);
+  const intervals = chordIntervals(c.suffix);
+  const pcs = intervals.map((i) => (root + i) % 12);
+  const bass = c.bass && !/^\d+$/.test(c.bass) ? noteIndex(c.bass) : root;
+  return { root, pcs, bass, intervals };
+}
+
+/** Nomes das notas do acorde, ex.: "Am" → ["A","C","E"]; "C/G" → ["G","C","E"] (baixo primeiro). */
+export function chordNotes(token, flats = false) {
+  const info = chordPitchClasses(token);
+  if (!info) return [];
+  const names = flats ? FLAT_NAMES : SHARP_NAMES;
+  const notes = info.pcs.map((p) => names[p]);
+  if (info.bass !== info.root) notes.unshift(names[info.bass]);
+  return [...new Set(notes)];
+}

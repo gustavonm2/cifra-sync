@@ -34,7 +34,49 @@
   </header>
 
   <section class="ribbon" id="ribbon" aria-label="Fila de acordes"><div class="track" id="track"></div></section>
-  <main id="chart" aria-live="off"></main>
+  <div class="layout">
+    <main id="chart" aria-live="off"></main>
+
+    <aside id="side" class="side" aria-label="Início e acordes da música">
+      <div class="card">
+        <div class="card-head"><span>Como começar</span></div>
+        <div class="seg" role="group" aria-label="Início">
+          <button class="btn" type="button" data-start="now" aria-pressed="false">Direto</button>
+          <button class="btn" type="button" data-start="count" aria-pressed="false">Contagem</button>
+          <button class="btn" type="button" data-start="listen" aria-pressed="false">Ouvir acorde</button>
+        </div>
+        <div class="row" id="count-row">
+          <span>Contagem</span>
+          <div class="stepper"><button class="btn icon" id="count-down" type="button" aria-label="Menos segundos">−</button><output id="count-val">3 s</output><button class="btn icon" id="count-up" type="button" aria-label="Mais segundos">+</button></div>
+        </div>
+        <button class="btn toggle wide" id="follow" type="button" aria-pressed="false">Seguir o meu áudio</button>
+        <p class="hint" id="start-hint"></p>
+        <div class="mic" id="mic" hidden>
+          <div class="meter" aria-hidden="true"><i id="meter-i"></i></div>
+          <span id="heard">ouvindo…</span>
+        </div>
+      </div>
+
+      <div class="card chords-card">
+        <div class="card-head"><span>Acordes da música</span><span id="chord-count"></span></div>
+        <div class="chord-list" id="chord-list"></div>
+      </div>
+    </aside>
+
+    <div class="overlay" id="overlay" hidden>
+      <div class="ov-box" role="alertdialog" aria-live="assertive" aria-label="Preparação">
+        <div class="ov-label" id="ov-label">Prepare-se</div>
+        <div class="ov-big" id="ov-big">3</div>
+        <div class="ov-chord" id="ov-chord"></div>
+        <div class="ov-sub" id="ov-sub"></div>
+        <div class="mic ov-mic" id="ov-mic" hidden><div class="meter" aria-hidden="true"><i id="ov-meter-i"></i></div></div>
+        <div class="ov-actions">
+          <button class="btn" id="ov-cancel" type="button">Cancelar</button>
+          <button class="btn primary" id="ov-now" type="button" hidden>Começar agora</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <footer class="bar">
     <button class="btn icon" id="prev" type="button" aria-label="Acorde anterior" title="Acorde anterior (←)">⏮</button>
@@ -58,6 +100,7 @@
       <button class="btn icon" id="font-down" type="button" aria-label="Diminuir fonte">A−</button>
       <button class="btn icon" id="font-up" type="button" aria-label="Aumentar fonte">A+</button>
     </div>
+    <button class="btn panel-toggle" id="side-toggle" type="button" aria-expanded="false" aria-controls="side">Painel</button>
     <span class="meta" id="meta">0 / 0</span>
   </footer>
 
