@@ -32,6 +32,7 @@ export function blankSong(over = {}) {
     text: over.text ?? '',
     transpose: Number.isFinite(over.transpose) ? over.transpose : 0,
     speed: Number.isFinite(over.speed) ? over.speed : 2.5, // segundos por acorde
+    holds: over.holds && typeof over.holds === 'object' ? over.holds : {}, // { índice do acorde: multiplicador de duração }
   };
 }
 

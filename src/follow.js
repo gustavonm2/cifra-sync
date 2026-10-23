@@ -11,8 +11,9 @@ const LATENCY = 0.2; // s entre o acorde começar e o detector confirmá-lo
 
 export class Follower {
   /** names: nomes exibidos (já transpostos) de cada passo; speed: segundos por acorde (estimativa inicial). */
-  constructor(names, { cur = 0, speed = 2.5, now = 0 } = {}) {
+  constructor(names, { cur = 0, speed = 2.5, now = 0, holds = {} } = {}) {
     this.names = names;
+    this.holds = holds; // acordes segurados (multiplicador > 1) não servem para medir a velocidade
     this.cur = cur;
     this.speed = speed;
     this.t0 = now;
@@ -21,12 +22,12 @@ export class Follower {
   /** Posição fracionária (índice do acorde + fração), no instante `now` (s). */
   position(now) {
     const last = this.names.length - 1;
-    let elapsed = (now - this.t0) / this.speed;
+    let elapsed = (now - this.t0) / (this.speed * (this.holds[this.cur] ?? 1));
     // acordes repetidos em sequência não podem ser distinguidos pelo som: segue o relógio
     while (elapsed >= 1 && this.cur < last && this.names[this.cur + 1] === this.names[this.cur]) {
+      this.t0 += this.speed * (this.holds[this.cur] ?? 1);
       this.cur++;
-      this.t0 += this.speed;
-      elapsed -= 1;
+      elapsed = (now - this.t0) / (this.speed * (this.holds[this.cur] ?? 1));
     }
     return this.cur + Math.min(Math.max(elapsed, 0), HOLD_FRAC);
   }
@@ -43,7 +44,8 @@ export class Follower {
       if (this.names[i] !== name) continue;
       const skipped = i - this.cur;
       const per = (now - LATENCY - this.t0) / skipped;
-      if (per >= MIN_SPEED && per <= MAX_SPEED) {
+      const held = (this.holds[this.cur] ?? 1) > 1; // acorde segurado: o intervalo não reflete a velocidade
+      if (!held && per >= MIN_SPEED && per <= MAX_SPEED) {
         this.speed = Math.min(MAX_SPEED, Math.max(MIN_SPEED, 0.6 * this.speed + 0.4 * per));
       }
       this.cur = i;

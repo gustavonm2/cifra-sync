@@ -76,3 +76,54 @@ test('slideProgress: parado, desliza no fim, termina em 1', () => {
   assert.equal(slideProgress(1), 1);
   assert.ok(slideProgress(0.9) > slideProgress(0.8));
 });
+
+import { slideFrom, durationOf, HOLD_OPTIONS } from '../src/steps.js';
+import { Follower } from '../src/follow.js';
+
+test('advance respeita acordes segurados (multiplicador de duração)', () => {
+  const holds = { 1: 3 }; // o acorde 1 dura 3× mais
+  let r = advance(1, 3, 1, 5, holds); // 3 s dentro de um acorde de 3 s → chega ao acorde 2
+  assert.ok(Math.abs(r.pos - 2) < 1e-9);
+  r = advance(1, 1.5, 1, 5, holds);
+  assert.ok(Math.abs(r.pos - 1.5) < 1e-9); // metade do acorde segurado
+  r = advance(0, 2.5, 1, 5, holds); // 1 s no acorde 0 + 1,5 s no acorde 1 (metade)
+  assert.ok(Math.abs(r.pos - 1.5) < 1e-9);
+});
+
+test('advance atravessa vários acordes de uma vez e para no fim', () => {
+  assert.ok(Math.abs(advance(0, 2.5, 1, 10).pos - 2.5) < 1e-9);
+  const r = advance(8, 100, 1, 10, { 8: 2 });
+  assert.equal(r.ended, true);
+  assert.ok(r.pos < 10 && r.pos > 9.99);
+});
+
+test('durationOf e opções de segurar', () => {
+  assert.equal(durationOf(2, { 3: 2 }, 3), 4);
+  assert.equal(durationOf(2, { 3: 2 }, 4), 2);
+  assert.equal(durationOf(2, undefined, 0), 2);
+  assert.deepEqual(HOLD_OPTIONS, [1, 1.5, 2, 3, 4, 6]);
+});
+
+test('a fila só desliza no fim: 35% em acordes curtos, 0,6 s em acordes longos', () => {
+  assert.ok(Math.abs(slideFrom(1) - 0.65) < 1e-9);
+  assert.ok(Math.abs(slideFrom(4) - 0.85) < 1e-9); // 0,6 s de 4 s = 15%
+  assert.ok(slideFrom(10) > slideFrom(4));
+});
+
+test('seguindo o áudio, acorde segurado não distorce a velocidade medida', () => {
+  const names = ['Am', 'F', 'C', 'G'];
+  const holds = { 1: 3 };
+  const f = new Follower(names, { speed: 2, now: 0, cur: 1, holds });
+  f.hear('C', 'weak', 6.2); // F durou 6 s por ser segurado (3 × 2 s)
+  assert.equal(f.speed, 2);
+  assert.equal(f.cur, 2);
+  const g = new Follower(names, { speed: 2, now: 0, cur: 1, holds: {} });
+  g.hear('C', 'weak', 6.2); // sem hold, os mesmos 6 s indicariam lentidão
+  assert.ok(g.speed > 2);
+});
+
+test('acordes repetidos seguem o relógio usando a duração segurada', () => {
+  const f = new Follower(['Am', 'C', 'C', 'G'], { speed: 1, now: 0, cur: 1, holds: { 1: 2 } });
+  assert.ok(f.position(1.9) < 2); // o 1º C dura 2 s
+  assert.ok(f.position(2.2) >= 2);
+});

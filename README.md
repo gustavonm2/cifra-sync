@@ -31,11 +31,12 @@ Cobrem o parser de cifras (`tests/parser.test.js`), acordes, transposição e no
 3. **Seguir o meu áudio** (opcional, usa o microfone): depois de começar, a cifra acompanha o que você toca. Quando o app ouve o próximo acorde, ele avança; se você demora, a cifra espera; se você pula 1 a 3 acordes, ela acompanha. A velocidade (segundos por acorde) é estimada pelo seu toque e fica salva ao parar. Se você parar de tocar por 6 s, ela pausa e espera você voltar ao acorde atual.
 4. **Play** (ou `Espaço`). A fila de acordes fica parada no acorde atual (âmbar, com barra de progresso) e desliza para o próximo no fim do tempo dele. A cifra rola de modo que a linha atual e as duas seguintes fiquem visíveis. `Esc` cancela a contagem ou a escuta.
 5. **Velocidade manual:** segundos por acorde (0,5 a 8), pelos botões − / +, pelo slider ou por **Lento / Normal / Rápido**. Cada acorde dura o mesmo tempo. Fica salva por música.
-6. **Passo manual:** ⏮ / ⏭ (ou `←` / `→`) voltam e avançam um acorde. Tocar num acorde da fila, da caixa lateral ou numa linha da cifra pula para lá.
-7. **Acordes da música** (caixa lateral): cada acorde diferente, com as notas que o formam (ex.: `Am` → A · C · E), quantas vezes aparece e o acorde atual em destaque. Tocar num deles pula para a primeira vez em que aparece. No celular fica na gaveta **Painel**.
-8. **Tom − / +** transpõe todos os acordes, inclusive o baixo (`C/G`), com sustenidos ou bemóis conforme o tom de destino.
-9. **A− / A+** mudam o tamanho da letra. A tela fica acesa enquanto a cifra anda (onde o navegador permite).
-10. **Biblioteca:** salva e abre músicas (título, artista, cifra, tom, velocidade).
+6. **Segurar o acorde** (caixa lateral): para pausas, como o acorde que fecha uma estrofe antes de começar a seguinte. Escolha o acorde (toque nele na fila) e use − / + para torná-lo ×1,5, ×2, ×3, ×4 ou ×6 mais longo. Aparece um selo `×N` no acorde, a fila só desliza no fim do tempo dele e a configuração fica salva na música. Seguindo o áudio, a cifra já espera você de qualquer forma; acordes segurados só não entram no cálculo da velocidade.
+7. **Passo manual:** ⏮ / ⏭ (ou `←` / `→`) voltam e avançam um acorde. Tocar num acorde da fila, da caixa lateral ou numa linha da cifra pula para lá.
+8. **Acordes da música** (caixa lateral): cada acorde diferente, com as notas que o formam (ex.: `Am` → A · C · E), quantas vezes aparece e o acorde atual em destaque. Tocar num deles pula para a primeira vez em que aparece. No celular fica na gaveta **Painel**.
+9. **Tom − / +** transpõe todos os acordes, inclusive o baixo (`C/G`), com sustenidos ou bemóis conforme o tom de destino.
+10. **A− / A+** mudam o tamanho da letra. A tela fica acesa enquanto a cifra anda (onde o navegador permite).
+11. **Biblioteca:** salva e abre músicas (título, artista, cifra, tom, velocidade e acordes segurados).
 
 ### Como o áudio funciona
 

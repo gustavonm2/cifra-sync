@@ -1,5 +1,5 @@
 // Service worker: guarda o app inteiro para uso offline.
-const CACHE = 'cifra-sync-v7';
+const CACHE = 'cifra-sync-v8';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'styles/app.css',
   'src/app.js', 'src/chords.js', 'src/parser.js', 'src/steps.js', 'src/audio.js', 'src/follow.js', 'src/storage.js', 'src/demo.js',

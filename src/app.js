@@ -1,6 +1,6 @@
 import { parseSong, firstChord } from './parser.js';
 import { transposeChord, keyLabel, flatsForSong, chordNotes } from './chords.js';
-import { buildSteps, locate, advance, clampSeconds, slideProgress, MIN_SECONDS, MAX_SECONDS } from './steps.js';
+import { buildSteps, locate, advance, clampSeconds, slideProgress, slideFrom, durationOf, HOLD_OPTIONS } from './steps.js';
 import { ChordListener } from './audio.js';
 import { Follower } from './follow.js';
 import * as store from './storage.js';
@@ -143,6 +143,7 @@ function renderRibbon() {
     const chip = el('button', 'chip', chordName(st.name));
     chip.type = 'button';
     if (st.section) chip.append(el('span', 'sec', st.section));
+    if ((song.holds[i] ?? 1) > 1) chip.append(el('span', 'hold', `×${song.holds[i]}`.replace('.', ',')));
     const fill = el('span', 'fill');
     fill.append(el('i'));
     chip.append(fill);
@@ -202,7 +203,7 @@ function tick(dt, now) {
       if (nowSec() - lastSoundAt > SILENCE_PAUSE) waitForPlayer('Parei de ouvir você.');
       else if (pos >= seq.steps.length - 0.4 && follower.cur >= seq.steps.length - 1) finish();
     } else {
-      const r = advance(pos, dt, song.speed, seq.steps.length);
+      const r = advance(pos, dt, song.speed, seq.steps.length, song.holds);
       pos = r.pos;
       if (r.ended) finish();
     }
@@ -213,7 +214,7 @@ function tick(dt, now) {
   // o deslocamento mostrado persegue o alvo, suavizando pulos (clique, acorde ouvido)
   const a = lefts[cur] ?? 0;
   const b = lefts[cur + 1] ?? a;
-  const target = a + (b - a) * slideProgress(frac);
+  const target = a + (b - a) * slideProgress(frac, slideFrom(durationOf(song.speed, song.holds, cur)));
   shownX += (target - shownX) * (1 - Math.exp(-dt * 16));
   if (Math.abs(target - shownX) < 0.3) shownX = target;
   dom.track.style.transform = `translateX(${-shownX}px)`;
@@ -241,6 +242,7 @@ function tick(dt, now) {
       btn.classList.toggle('next', name === names[cur + 1] && name !== names[cur]);
     });
     chordButtons.get(names[cur])?.scrollIntoView?.({ block: 'nearest' });
+    refreshHoldCard();
     computeScrollTarget(st.lineIdx);
   }
   if (follower) {
@@ -407,7 +409,7 @@ function startRunning(heard) {
   phase = 'playing';
   const idx = Math.floor(pos);
   if (settings.follow) {
-    follower = new Follower(displayNames(), { cur: idx, speed: song.speed, now: nowSec() - (heard ? 0.2 : 0) });
+    follower = new Follower(displayNames(), { cur: idx, speed: song.speed, now: nowSec() - (heard ? 0.2 : 0), holds: song.holds });
   } else {
     follower = null;
     pos = idx + (heard ? 0.2 / song.speed : 0);
@@ -461,13 +463,43 @@ function setSpeed(v, save = true) {
   }
 }
 
+// ---------- segurar acordes ----------
+const holdLabel = (m) => (m === 1 ? 'normal' : `×${String(m).replace('.', ',')}`);
+
+function refreshHoldCard() {
+  const i = Math.floor(pos);
+  const st = seq.steps[i];
+  if (!st) return;
+  $('#hold-chord').textContent = `${chordName(st.name)} · ${i + 1}`;
+  $('#hold-val').textContent = holdLabel(song.holds[i] ?? 1);
+}
+
+function setHold(i, value) {
+  if (value === 1) delete song.holds[i];
+  else song.holds[i] = value;
+  const chip = chips[i];
+  chip?.querySelector('.hold')?.remove();
+  if (chip && value > 1) chip.prepend(el('span', 'hold', holdLabel(value)));
+  refreshHoldCard();
+  persist();
+}
+
+function stepHold(d) {
+  const i = Math.floor(pos);
+  if (!seq.steps[i]) return;
+  const k = HOLD_OPTIONS.indexOf(song.holds[i] ?? 1);
+  setHold(i, HOLD_OPTIONS[Math.max(0, Math.min(HOLD_OPTIONS.length - 1, (k < 0 ? 0 : k) + d))]);
+}
+$('#hold-down').addEventListener('click', () => stepHold(-1));
+$('#hold-up').addEventListener('click', () => stepHold(1));
+
 function setTranspose(d) {
   song.transpose = Math.max(-11, Math.min(11, song.transpose + d));
   const keep = pos;
   const was = follower;
   build();
   pos = keep;
-  if (was) follower = new Follower(displayNames(), { cur: Math.floor(keep), speed: was.speed, now: nowSec() - (keep % 1) * was.speed });
+  if (was) follower = new Follower(displayNames(), { cur: Math.floor(keep), speed: was.speed, now: nowSec() - (keep % 1) * was.speed, holds: song.holds });
   persist();
 }
 
@@ -630,11 +662,13 @@ function importFromHash() {
 $('#form-edit').addEventListener('submit', (e) => {
   if (e.submitter?.value !== 'save') return;
   const target = editing ?? store.blankSong();
+  const before = editing ? buildSteps(parseSong(editing.text)).steps.length : 0;
   Object.assign(target, {
     title: $('#f-title').value.trim() || 'Sem título',
     artist: $('#f-artist').value.trim(),
     text: $('#f-text').value,
   });
+  if (editing && buildSteps(parseSong(target.text)).steps.length !== before) target.holds = {}; // índices mudaram
   if (!songs.includes(target)) songs.unshift(target);
   store.saveSongs(songs);
   loadSong(target);

@@ -42,11 +42,34 @@ export function locate(count, pos) {
   return { cur, frac: clamped - cur };
 }
 
-/** Avança `pos` em `dt` segundos a `secPerChord`; devolve { pos, ended }. */
-export function advance(pos, dt, secPerChord, count) {
-  const next = pos + dt / secPerChord;
-  if (next >= count - 1e-3) return { pos: Math.max(0, count - 1e-3), ended: true };
-  return { pos: next, ended: false };
+/** Multiplicadores de duração para "segurar" um acorde (pausas no fim da estrofe, notas longas). */
+export const HOLD_OPTIONS = [1, 1.5, 2, 3, 4, 6];
+
+/** Duração (s) do acorde `i`: velocidade × multiplicador (1 se não houver). */
+export const durationOf = (secPerChord, holds, i) => secPerChord * (holds?.[i] ?? 1);
+
+/**
+ * Avança `pos` em `dt` segundos. Cada acorde dura `secPerChord × holds[i]` (holds é opcional).
+ * Devolve { pos, ended }.
+ */
+export function advance(pos, dt, secPerChord, count, holds = {}) {
+  let p = pos;
+  let left = dt;
+  const end = count - 1e-3;
+  while (left > 1e-9) {
+    const i = Math.floor(p);
+    const dur = durationOf(secPerChord, holds, i);
+    const toEnd = (i + 1 - p) * dur;
+    if (left < toEnd) {
+      p += left / dur;
+      left = 0;
+    } else {
+      left -= toEnd;
+      p = i + 1;
+    }
+    if (p >= end) return { pos: Math.max(0, end), ended: true };
+  }
+  return { pos: p, ended: false };
 }
 
 export const MIN_SECONDS = 0.5;
@@ -56,6 +79,9 @@ export const MAX_SECONDS = 8;
 export function clampSeconds(s) {
   return Math.min(MAX_SECONDS, Math.max(MIN_SECONDS, Math.round(s * 4) / 4));
 }
+
+/** Em que fração do acorde a fila começa a deslizar: nos últimos 35%, ou nos últimos 0,6 s se o acorde for longo. */
+export const slideFrom = (durationSec) => 1 - Math.min(0.35, 0.6 / durationSec);
 
 /** Suavização da passagem de um acorde ao próximo: parado até `from`, desliza até 1. */
 export function slideProgress(frac, from = 0.65) {
